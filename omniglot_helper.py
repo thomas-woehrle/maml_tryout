@@ -1,0 +1,25 @@
+import os
+
+background_imgs_path = 'omniglot/images_background'
+eval_imgs_path = 'omniglot/images_evaluation'
+
+
+def get_chars_from_dir(dir_path):
+    chars = []
+    for alphabet in os.listdir(dir_path):
+        path = os.path.join(dir_path, alphabet)
+        if os.path.isdir(path):
+            for char in os.listdir(path):
+                sub_path = os.path.join(path, char)
+                if os.path.isdir(sub_path):
+                    chars.append(sub_path)
+
+    return chars
+
+
+def get_all_chars():
+    all_chars = []
+    all_chars += get_chars_from_dir(background_imgs_path)
+    all_chars += get_chars_from_dir(eval_imgs_path)
+
+    return all_chars
