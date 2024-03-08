@@ -1,4 +1,5 @@
 import os
+import matplotlib.pyplot as plt
 
 background_imgs_path = 'omniglot/images_background'
 eval_imgs_path = 'omniglot/images_evaluation'
@@ -23,3 +24,13 @@ def get_all_chars():
     all_chars += get_chars_from_dir(eval_imgs_path)
 
     return all_chars
+
+
+def test_sync(x, y):
+    for img, (idx, cls) in zip(x, enumerate(y)):
+        img = img.permute(1, 2, 0)
+        img = img.numpy()
+        print(img.shape)
+        plt.imshow(img)
+        plt.title(str(cls.item()) + str(idx % 5))
+        plt.show()

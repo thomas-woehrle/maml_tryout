@@ -4,7 +4,10 @@ import os
 import random
 import sys
 import torch
+import torch.nn as nn
+from learn2learn import clone_module
 from omniglot_helper import get_all_chars
+from omniglot_net import OmniglotNet
 from torchvision import transforms
 from typing import List
 
@@ -47,43 +50,33 @@ def generate_k_samples_from_task(task: List[str], k):
     return x, y
 
 
-task = get_task('train', 5)
-x, y = generate_k_samples_from_task(task, 5)
-print(x.shape)
-print(y.shape)
-
-sys.exit(0)
-
 n_episodes = ...
 meta_batch_size = 32
-n = ...
-k = ...
-a, b = ...  # learning rates during training
+n = 5
+k = 1
+alpha, beta = 0.4, 0.001  # learning rates during training
+# TODO find out real beta
 
-criterion = ...  # same for every task
+criterion = nn.CrossEntropyLoss(reduction='sum')  # same for every task
 optim = ...
-meta_model = ...
-meta_optimizer = optim.SGD(meta_model.parameters, b)
-
-task_specific_params = dict()
-task_meta_samples = dict()
+meta_model = OmniglotNet(n)
+meta_optimizer = optim.SGD(meta_model.parameters(), beta)
 
 for i in range(n_episodes):
     meta_loss = 0
     for j in range(meta_batch_size):
-        train_task = get_task('train', n)  # determine the characters ?
-        # x and y have to have batch_size of nxk
+        train_task = get_task('train', n)
         x, y = generate_k_samples_from_task(train_task, k)
-        loss = criterion(meta_model(x), y)
-        # the gradients of meta_model are utilized in the inner loop as well
-        meta_optimizer.zero_grad()
-        loss.backward()
-        theta_prime = ...
-        # just clone the old model via the learn2learn clone function ?
-        for parameter in meta_model:
-            theta_prime[parameter.name] = parameter - a * parameter.grad
-        task_model = ...  # create from theta_prime
-        test_task = get_task(test_dataset)
+        # x and y have batch_size of n*k
+        # technically, get_task and generate_k_samples_from_task could easily be put into one function. However,
+        # this approach sticks closer to the original concept of a task that generates samples
+
+        task_model = clone_module(meta_model)  # pseuodcode
+        task_optimizer = optim.SGD(task_model.parameters(), alpha)
+        loss = criterion(task_model(x), y)
+        loss.backward()  # this should update gradients in task_model, but realisitically will only update it in meta_model?
+        task_optimizer.step()
+        test_task = get_task('val', n)
         x, y = generate_k_samples_from_task(test_task, k)
         meta_loss += criterion(task_model(x), y)
 
