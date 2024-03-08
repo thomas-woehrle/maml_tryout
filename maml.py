@@ -1,9 +1,11 @@
 import cv2
+import matplotlib.pyplot as plt
 import os
 import random
 import sys
-import matplotlib.pyplot as plt
+import torch
 from omniglot_helper import get_all_chars
+from torchvision import transforms
 from typing import List
 
 omniglot_chars = get_all_chars()
@@ -21,22 +23,34 @@ def get_task(dataset, n) -> List[str]:
         raise ValueError('dataset argument invalid: ' + dataset)
 
 
+transform = transforms.Compose([
+    transforms.ToTensor(),  # also changes to C x H x W
+    transforms.Resize((28, 28), antialias=True)
+    # antialias=True, because warning message
+])
+
+
 def generate_k_samples_from_task(task: List[str], k):
-    x = None
-    y = None
-    for char in task:
+    x = []  # will be transformed to a tensor later
+    y = []  # same here
+    for i, char in enumerate(task):
         file_names = random.sample(os.listdir(char), k=k)
         for fn in file_names:
             img = cv2.imread(os.path.join(char, fn))
-            # downsize, append to x
-            # get label, append to x
-            plt.imshow(img)
-            plt.title(char + '\n' + fn)
-            plt.show()
+            img = transform(img)
+            x.append(img)
+            y.append(i)
+
+    x = torch.stack(x)
+    y = torch.tensor(y)
+
+    return x, y
 
 
 task = get_task('train', 5)
-generate_k_samples_from_task(task, 5)
+x, y = generate_k_samples_from_task(task, 5)
+print(x.shape)
+print(y.shape)
 
 sys.exit(0)
 
