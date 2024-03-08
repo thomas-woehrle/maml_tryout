@@ -5,6 +5,7 @@ import random
 import sys
 import torch
 import torch.nn as nn
+import torch.optim as optim
 from learn2learn import clone_module
 from omniglot_helper import get_all_chars
 from omniglot_net import OmniglotNet
@@ -17,7 +18,7 @@ train_chars = omniglot_chars[:1200]
 val_chars = omniglot_chars[1200:]
 
 
-def get_task(dataset, n) -> List[str]:
+def get_task(dataset: str, n: int) -> List[str]:
     if dataset == 'train':
         return random.sample(train_chars, k=n)
     elif dataset == 'val':
@@ -50,7 +51,7 @@ def generate_k_samples_from_task(task: List[str], k):
     return x, y
 
 
-n_episodes = ...
+n_episodes = 100
 meta_batch_size = 32
 n = 5
 k = 1
@@ -58,9 +59,8 @@ alpha, beta = 0.4, 0.001  # learning rates during training
 # TODO find out real beta
 
 criterion = nn.CrossEntropyLoss(reduction='sum')  # same for every task
-optim = ...
 meta_model = OmniglotNet(n)
-meta_optimizer = optim.SGD(meta_model.parameters(), beta)
+meta_optimizer = optim.SGD(meta_model.parameters(), lr=beta)
 
 for i in range(n_episodes):
     meta_loss = 0
@@ -71,8 +71,8 @@ for i in range(n_episodes):
         # technically, get_task and generate_k_samples_from_task could easily be put into one function. However,
         # this approach sticks closer to the original concept of a task that generates samples
 
-        task_model = clone_module(meta_model)  # pseuodcode
-        task_optimizer = optim.SGD(task_model.parameters(), alpha)
+        task_model = clone_module(meta_model)  # not sure if this cloning works
+        task_optimizer = optim.SGD(task_model.parameters(), lr=alpha)
         loss = criterion(task_model(x), y)
         loss.backward()  # this should update gradients in task_model, but realisitically will only update it in meta_model?
         task_optimizer.step()
@@ -80,6 +80,8 @@ for i in range(n_episodes):
         x, y = generate_k_samples_from_task(test_task, k)
         meta_loss += criterion(task_model(x), y)
 
+    print(i)
+    print(meta_loss)
     meta_optimizer.zero_grad()
     meta_loss.backward()
     meta_optimizer.step()

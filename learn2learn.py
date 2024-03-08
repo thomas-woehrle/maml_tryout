@@ -5,9 +5,12 @@ Source for all of this:
 https://learn2learn.net
 """
 
+import torch
 
 # source:
 # https://github.com/learnables/learn2learn/blob/752200384c3ca8caeb8487b5dd1afd6568e8ec01/learn2learn/utils/__init__.py#L51
+
+
 def clone_module(module, memo=None):
     """
 
