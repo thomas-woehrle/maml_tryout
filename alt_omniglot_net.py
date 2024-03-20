@@ -46,19 +46,19 @@ class OmniglotNet(nn.Module):
             running_var = torch.ones(64)
             x = F.conv2d(x, weights['net.conv1.weight'],
                          weights['net.conv1.bias'])
-            x = F.batch_norm(x, running_mean=running_mean, running_var=running_var, weight=weights['net.bn1.weight'],
-                             bias=weights['net.bn1.bias'], momentum=1)
+            x = F.batch_norm(x, running_mean=running_mean, training=True, running_var=running_var, weight=weights['net.bn1.weight'],
+                             bias=weights['net.bn1.bias'])  # , momentum=1)
             x = F.relu(x)
             x = F.max_pool2d(x, kernel_size=2, stride=2)
             x = F.conv2d(x, weights['net.conv2.weight'],
                          weights['net.conv2.bias'])
-            x = F.batch_norm(x, running_mean=running_mean, running_var=running_var, weight=weights['net.bn2.weight'],
+            x = F.batch_norm(x, running_mean=running_mean, training=True, running_var=running_var, weight=weights['net.bn2.weight'],
                              bias=weights['net.bn2.bias'], momentum=1)
             x = F.relu(x)
             x = F.max_pool2d(x, kernel_size=2, stride=2)
             x = F.conv2d(x, weights['net.conv3.weight'],
                          weights['net.conv3.bias'])
-            x = F.batch_norm(x, running_mean=running_mean, running_var=running_var, weight=weights['net.bn3.weight'],
+            x = F.batch_norm(x, running_mean=running_mean, training=True, running_var=running_var, weight=weights['net.bn3.weight'],
                              bias=weights['net.bn3.bias'], momentum=1)
             x = F.relu(x)
             x = F.max_pool2d(x, kernel_size=2, stride=2)

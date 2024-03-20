@@ -52,11 +52,11 @@ def generate_k_samples_from_task(task: List[str], k):
     return x, y
 
 
-n_episodes = 100
+n_episodes = 1000
 meta_batch_size = 32
 n = 5
 k = 1
-alpha, beta = 0.4, 0.01  # learning rates during training
+alpha, beta = 0.4, 0.1  # learning rates during training
 # TODO find out real beta
 
 criterion = nn.CrossEntropyLoss(reduction='sum')  # same for every task
@@ -72,17 +72,6 @@ for i in range(n_episodes):
         # technically, get_task and generate_k_samples_from_task could easily be put into one function. However,
         # this approach sticks closer to the original concept of a task that generates samples
 
-        """
-        task_model = clone_module(meta_model)  # not sure if this cloning works
-        task_optimizer = optim.SGD(task_model.parameters(), lr=alpha)
-        loss = criterion(task_model(x), y)
-        loss.backward()  # this should update gradients in task_model, but realisitically will only update it in meta_model?
-        task_optimizer.step()
-        test_task = get_task('val', n)
-        x, y = generate_k_samples_from_task(test_task, k)
-        meta_loss += criterion(task_model(x), y)
-        """
-
         # inspiration taken from https://github.com/katerakelly/pytorch-maml/blob/master/src/inner_loop.py
         meta_optimizer.zero_grad()
         loss = criterion(meta_model.forward(x), y)
@@ -90,28 +79,26 @@ for i in range(n_episodes):
         # NOTE slightly different architecture needed if more than one update is made
         task_theta = OrderedDict((name, param - alpha*param.grad)
                                  for (name, param) in meta_model.named_parameters())
-
         val_task = get_task('val', n)
         x_val, y_val = generate_k_samples_from_task(val_task, k)
         logits = meta_model.forward(x_val, weights=task_theta)
+
         x_hat = torch.argmax(logits, dim=1)
-        # if i < 0:
-        #     for img, (idx, cls_hat), cls in zip(x_val, enumerate(x_hat), y_val):
-        #         img = img.permute(1, 2, 0)
-        #         img = img.numpy()
-        #         plt.imshow(img)
-        #         plt.title('logits:' + str(logits[idx]) + ' \nargmax:' +
-        #                   str(cls_hat.item()) + '\nreal:' + str(cls.item()))
-        #         plt.tight_layout()
-        #         plt.show()
-        # print(torch.argmax(x_hat, dim=1).shape)
+        if i == 80:
+            for img, (idx, cls_hat), cls in zip(x_val, enumerate(x_hat), y_val):
+                img = img.permute(1, 2, 0)
+                img = img.numpy()
+                plt.imshow(img)
+                plt.title('logits:' + str(logits[idx]) + ' \nargmax:' +
+                          str(cls_hat.item()) + '\nreal:' + str(cls.item()))
+                plt.tight_layout()
+                plt.show()
 
         task_val_loss = criterion(logits, y_val)
-        # print(task_val_loss)
         meta_loss += task_val_loss
 
     print(i)
-    print(meta_loss)
+    print(meta_loss.item())
     meta_optimizer.zero_grad()
     meta_loss.backward()
     meta_optimizer.step()
