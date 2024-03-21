@@ -1,28 +1,27 @@
+import copy
 import cv2
-import matplotlib.pyplot as plt
 import os
 import random
-import sys
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from alt_omniglot_net import OmniglotNet as AltOmniglotNet
 from collections import OrderedDict
-from omniglot_helper import get_all_chars
+from omniglot_helper import get_all_chars, viz_logit
 from torchvision import transforms
 from typing import List
 
 omniglot_chars = get_all_chars()
 random.shuffle(omniglot_chars)  # in-place shuffle
 train_chars = omniglot_chars[:1200]
-val_chars = omniglot_chars[1200:]
+test_chars = omniglot_chars[1200:]
 
 
 def get_task(dataset: str, n: int) -> List[str]:
     if dataset == 'train':
         return random.sample(train_chars, k=n)
-    elif dataset == 'val':
-        return random.sample(val_chars, k=n)
+    elif dataset == 'test':
+        return random.sample(test_chars, k=n)
     else:
         raise ValueError('dataset argument invalid: ' + dataset)
 
@@ -51,6 +50,21 @@ def generate_k_samples_from_task(task: List[str], k):
     return x, y
 
 
+def load_named_parameters_in_model(model: nn.Module, named_parameters):
+    """
+    Works in-place.
+    The two parts have to be compatible.
+    """
+    model_dict = model.state_dict()
+
+    # Update with parameters from the original model
+    for name, param in named_parameters:
+        model_dict[name].copy_(param.data)
+
+    # Load the updated state dictionary
+    model.load_state_dict(model_dict)
+
+
 n_episodes = 100
 meta_batch_size = 32
 n = 5
@@ -60,34 +74,45 @@ alpha, beta = 0.4, 0.01  # learning rates during training
 
 criterion = nn.CrossEntropyLoss(reduction='sum')  # same for every task
 meta_model = AltOmniglotNet(n)
-meta_optimizer = optim.SGD(meta_model.parameters(), lr=beta)
 
-for i in range(n_episodes):
+for episode in range(n_episodes):
     meta_loss = 0
-    for j in range(meta_batch_size):
-        train_task = get_task('train', n)
-        x, y = generate_k_samples_from_task(train_task, k)
+    # initialize accumulated gradient to be a dictionary with keys corresponding to weights and values of 0 everywhere
+    acc_grad = {name: 0 for name, param in meta_model.named_parameters()}
+
+    for i in range(meta_batch_size):
+        task_model = copy.deepcopy(meta_model)
+        inner_optimizer = optim.SGD(task_model.parameters(), lr=alpha)
+
+        task = get_task('train', n)
+        x, y = generate_k_samples_from_task(task, k)
+        train_loss = criterion(task_model(x), y)
         # x and y have batch_size of n*k
         # technically, get_task and generate_k_samples_from_task could easily be put into one function. However,
         # this approach sticks closer to the original concept of a task that generates samples
 
-        # inspiration taken from https://github.com/katerakelly/pytorch-maml/blob/master/src/inner_loop.py
-        meta_optimizer.zero_grad()
-        loss = criterion(meta_model.forward(x), y)
-        loss.backward()
-        # NOTE slightly different architecture needed if more than one update is made
-        task_theta = OrderedDict((name, param - alpha*param.grad)
-                                 for (name, param) in meta_model.named_parameters())
+        # Inner loop update, currently only one step
+        inner_optimizer.zero_grad()
+        train_loss.backward()
+        inner_optimizer.step()
 
-        val_task = get_task('val', n)
-        x_val, y_val = generate_k_samples_from_task(val_task, k)
-        logits = meta_model.forward(x_val, weights=task_theta)
+        # Update meta loss
+        x_test, y_test = generate_k_samples_from_task(task, k)
+        logit = task_model(x_test)
+        if episode == 20:
+            viz_logit(x_test, y_test, torch.round(logit * 100))
 
-        task_val_loss = criterion(logits, y_val)
-        meta_loss += task_val_loss
+        test_loss = criterion(logit, y_test)
+        meta_loss += test_loss
 
-    print(i)
+        # Update grad accumulation used for meta update
+        inner_optimizer.zero_grad()  # needed
+        test_loss.backward()
+        acc_grad = {name: acc_grad[name] + param.grad for name,
+                    param in task_model.named_parameters()}
+
+    print(episode)
     print(meta_loss.item())
-    meta_optimizer.zero_grad()
-    meta_loss.backward()
-    meta_optimizer.step()
+    theta = {name: param - beta * acc_grad[name]
+             for name, param in meta_model.named_parameters()}
+    meta_model.load_state_dict(theta)

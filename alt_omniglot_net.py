@@ -14,17 +14,21 @@ class OmniglotNet(nn.Module):
     def __init__(self, num_classes):
         super(OmniglotNet, self).__init__()
         # Define the network
+        # TODO think about runnning_stats
         self.net = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(3, 64, 3)),
-            ('bn1', nn.BatchNorm2d(64, momentum=1, affine=True)),
+            ('bn1', nn.BatchNorm2d(64, momentum=1,
+             affine=True, track_running_stats=False)),
             ('relu1', nn.ReLU(inplace=True)),
             ('pool1', nn.MaxPool2d(2, 2)),
             ('conv2', nn.Conv2d(64, 64, 3)),
-            ('bn2', nn.BatchNorm2d(64, momentum=1, affine=True)),
+            ('bn2', nn.BatchNorm2d(64, momentum=1,
+             affine=True, track_running_stats=False)),
             ('relu2', nn.ReLU(inplace=True)),
             ('pool2', nn.MaxPool2d(2, 2)),
             ('conv3', nn.Conv2d(64, 64, 3)),
-            ('bn3', nn.BatchNorm2d(64, momentum=1, affine=True)),
+            ('bn3', nn.BatchNorm2d(64, momentum=1,
+             affine=True, track_running_stats=False)),
             ('relu3', nn.ReLU(inplace=True)),
             ('pool3', nn.MaxPool2d(2, 2)),
             ('flatten', nn.Flatten()),

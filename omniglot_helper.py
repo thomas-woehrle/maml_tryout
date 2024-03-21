@@ -34,3 +34,14 @@ def test_sync(x, y):
         plt.imshow(img)
         plt.title(str(cls.item()) + str(idx % 5))
         plt.show()
+
+
+def viz_logit(x, y, logits):
+    for idx, (img, cls, logit) in enumerate(zip(x, y, logits)):
+        img = img.permute(1, 2, 0)
+        img = img.numpy()
+        plt.imshow(img)
+        title = "logit: " + str(logit.tolist()) \
+                + "\nclass: " + str(cls)
+        plt.title(title)
+        plt.show()
