@@ -8,8 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from alt_omniglot_net import OmniglotNet as AltOmniglotNet
 from collections import OrderedDict
-from omniglot_helper import get_all_chars, test_sync
-from omniglot_net import OmniglotNet
+from omniglot_helper import get_all_chars
 from torchvision import transforms
 from typing import List
 
@@ -52,11 +51,11 @@ def generate_k_samples_from_task(task: List[str], k):
     return x, y
 
 
-n_episodes = 1000
+n_episodes = 100
 meta_batch_size = 32
 n = 5
 k = 1
-alpha, beta = 0.4, 0.1  # learning rates during training
+alpha, beta = 0.4, 0.01  # learning rates during training
 # TODO find out real beta
 
 criterion = nn.CrossEntropyLoss(reduction='sum')  # same for every task
@@ -79,20 +78,10 @@ for i in range(n_episodes):
         # NOTE slightly different architecture needed if more than one update is made
         task_theta = OrderedDict((name, param - alpha*param.grad)
                                  for (name, param) in meta_model.named_parameters())
+
         val_task = get_task('val', n)
         x_val, y_val = generate_k_samples_from_task(val_task, k)
         logits = meta_model.forward(x_val, weights=task_theta)
-
-        x_hat = torch.argmax(logits, dim=1)
-        if i == 80:
-            for img, (idx, cls_hat), cls in zip(x_val, enumerate(x_hat), y_val):
-                img = img.permute(1, 2, 0)
-                img = img.numpy()
-                plt.imshow(img)
-                plt.title('logits:' + str(logits[idx]) + ' \nargmax:' +
-                          str(cls_hat.item()) + '\nreal:' + str(cls.item()))
-                plt.tight_layout()
-                plt.show()
 
         task_val_loss = criterion(logits, y_val)
         meta_loss += task_val_loss
