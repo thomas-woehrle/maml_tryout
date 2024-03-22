@@ -30,7 +30,6 @@ def test_sync(x, y):
     for img, (idx, cls) in zip(x, enumerate(y)):
         img = img.permute(1, 2, 0)
         img = img.numpy()
-        print(img.shape)
         plt.imshow(img)
         plt.title(str(cls.item()) + str(idx % 5))
         plt.show()
