@@ -57,7 +57,7 @@ class OmniglotTask():
         else:
             raise ValueError('Argument invalid: ' + train_or_test)
 
-    def sample(self, k: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, k: int, device='cpu') -> tuple[torch.Tensor, torch.Tensor]:
         x = []  # will be transformed to a tensor later
         y = []  # same here
         for i, char in enumerate(self.chars):
@@ -71,4 +71,4 @@ class OmniglotTask():
         x = torch.stack(x)
         y = torch.tensor(y)
 
-        return x, y
+        return x.to(device), y.to(device)
