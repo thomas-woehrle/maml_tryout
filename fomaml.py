@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from alt_omniglot_net import OmniglotNet as AltOmniglotNet
 from omniglot_helper import viz_logit
-from task import get_task, generate_k_samples_from_task
+from tasks import get_task, generate_k_samples_from_task
 
 
 now = datetime.datetime.now()

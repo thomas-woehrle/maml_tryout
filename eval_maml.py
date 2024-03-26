@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from alt_omniglot_net import OmniglotNet
-from task import get_task, generate_k_samples_from_task
+from tasks import get_task, generate_k_samples_from_task
 
 parser = argparse.ArgumentParser()
 parser.add_argument('ckpt_path')
