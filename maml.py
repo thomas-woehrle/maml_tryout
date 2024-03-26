@@ -1,27 +1,56 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from task import OmniglotTask
 from torch.autograd import grad
 
 
-def forward(net: nn.Sequential, theta, x):
+def forward_old(net: nn.Sequential, theta, x):
     for layer_idx, param in enumerate(net.parameters()):
         # NOTE does this break backpropagation ? -> no should work
+        # NOTE THIS BREAKS THE COMPUTATION GRAPH, I WAS FOOLED
         param.data = theta[layer_idx]
 
     return net.forward(x)
+
+
+def forward(x, theta):
+    # Convolutional Layers with Batch Normalization
+    x = F.conv2d(x, theta[0], theta[1])
+    x = F.batch_norm(
+        x, None, None, theta[2], theta[3], momentum=1, training=True)
+    x = F.relu(x)
+    x = F.max_pool2d(x, 2, 2)
+
+    x = F.conv2d(x, theta[4], theta[5])
+    x = F.batch_norm(
+        x, None, None, theta[6], theta[7], momentum=1, training=True)
+    x = F.relu(x)
+    x = F.max_pool2d(x, 2, 2)
+
+    x = F.conv2d(x, theta[8], theta[9])
+    x = F.batch_norm(
+        x, None, None, theta[10], theta[11], momentum=1, training=True)
+    x = F.relu(x)
+    x = F.max_pool2d(x, 2, 2)
+
+    # Flatten and Linear Layer
+    x = torch.flatten(x, start_dim=1)
+    x = F.linear(x, theta[12], theta[13])
+
+    return x
 
 
 def compute_adapted_theta(net: nn.Sequential, theta, task: OmniglotTask, k: int, alpha, inner_gradient_steps):
     # theta = [p.clone().detach().requires_grad_(True) for p in theta]
     inner_gradient_steps = 1  # NOTE assumption for now
     x, y = task.sample(k)
-    x_hat = forward(net, theta, x)
+    x_hat = forward(x, theta)
     train_loss = task.loss_fct(x_hat, y)
-    grads = grad(train_loss, theta, create_graph=False, allow_unused=True)
+    grads = grad(train_loss, theta, create_graph=False)
     # create_graph=True should enable second order
     theta_task = [p - alpha * g for p, g in zip(theta, grads)]
-    return theta
+    return theta_task
 
 
 # Hyperparameters
@@ -55,6 +84,7 @@ net = nn.Sequential(
 
 # randomly_initialize parameters
 theta = [p for p in net.parameters()]  # should be list of tensors
+
 for _ in range(num_episodes):
     acc_meta_update = (torch.zeros_like(p) for p in theta)
     acc_loss = 0
@@ -66,7 +96,7 @@ for _ in range(num_episodes):
         # calculate the loss, calculate a gradient of the params wrt this loss and
         # update and return this theta. In addition, it has to be possible to backpropagate through this theta
         x_test, y_test = task.sample(k)
-        test_loss = task.loss_fct(forward(net, theta_i, x_test), y_test)
+        test_loss = task.loss_fct(forward(x_test, theta_i), y_test)
         acc_loss += test_loss.item()
         # I think no create_graph=True is needed
         grads = grad(test_loss, theta)
