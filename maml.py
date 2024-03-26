@@ -1,84 +1,77 @@
-import copy
-import datetime
-import os
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from alt_omniglot_net import OmniglotNet as AltOmniglotNet
-from omniglot_helper import viz_logit
-from task import get_task, generate_k_samples_from_task
+from task import OmniglotTask
+from torch.autograd import grad
 
 
-now = datetime.datetime.now()
-formatted_time = now.strftime("%Y-%m-%d-%H-%M-%S")
-checkpoint_dir = './checkpoints/' + formatted_time
-os.makedirs(checkpoint_dir, exist_ok=True)
-n_episodes = 60000  # i think 60000 in real world
-meta_batch_size = 32
-n = 5
-k = 1
-alpha, beta = 0.4, 0.001  # learning rates during training
-# TODO find out real beta -> apparently is 0.001
+def forward(net: nn.Sequential, theta, x):
+    for layer_idx, param in enumerate(net.parameters()):
+        # NOTE does this break backpropagation ? -> no should work
+        param.data = theta[layer_idx]
 
-criterion = nn.CrossEntropyLoss(reduction='sum')  # same for every task
-meta_model = AltOmniglotNet(n)
+    return net.forward(x)
 
-last_losses = []
-for episode in range(n_episodes):
-    meta_loss = 0
-    # initialize accumulated gradient to be a dictionary with keys corresponding to weights and values of 0 everywhere
-    acc_grad = {name: 0 for name, param in meta_model.named_parameters()}
+
+def compute_adapted_theta(net: nn.Sequential, theta, task: OmniglotTask, k: int, alpha, inner_gradient_steps):
+    # theta = [p.clone().detach().requires_grad_(True) for p in theta]
+    inner_gradient_steps = 1  # NOTE assumption for now
+    x, y = task.sample(k)
+    x_hat = forward(net, theta, x)
+    train_loss = task.loss_fct(x_hat, y)
+    grads = grad(train_loss, theta, create_graph=False, allow_unused=True)
+    # create_graph=True should enable second order
+    theta_task = [p - alpha * g for p, g in zip(theta, grads)]
+    return theta
+
+
+# Hyperparameters
+num_episodes = 100
+meta_batch_size = 32  # number of tasks sampled each episode
+n = 5  # n-way
+k = 1  # k-shot
+# size of D_i. number of data points to train on per task. Will be batch processed (?)
+# the paper does not mention whether the size of D_i' has to be the same, but anything else wouldnt make sense imo
+inner_gradient_steps = 1  # gradient steps done in inner loop during training
+# NOTE not entirely sure how multiple gradient steps are handled
+alpha, beta = 0.4, 0.001
+
+net = nn.Sequential(
+    nn.Conv2d(3, 64, 3),
+    nn.BatchNorm2d(64, momentum=1, affine=True, track_running_stats=False),
+    nn.ReLU(inplace=True),
+    nn.MaxPool2d(2, 2),
+    nn.Conv2d(64, 64, 3),
+    nn.BatchNorm2d(64, momentum=1, affine=True, track_running_stats=False),
+    nn.ReLU(inplace=True),
+    nn.MaxPool2d(2, 2),
+    nn.Conv2d(64, 64, 3),
+    nn.BatchNorm2d(64, momentum=1, affine=True, track_running_stats=False),
+    nn.ReLU(inplace=True),
+    nn.MaxPool2d(2, 2),
+    nn.Flatten(),
+    nn.Linear(64, n)
+)
+# NOTE not sure how to handle train vs eval -> batchnorm
+
+# randomly_initialize parameters
+theta = [p for p in net.parameters()]  # should be list of tensors
+for _ in range(num_episodes):
+    acc_meta_update = (torch.zeros_like(p) for p in theta)
+    acc_loss = 0
     for i in range(meta_batch_size):
-        task_model = copy.deepcopy(meta_model)
-        old_task_model = {name: param for name,
-                          param in task_model.named_parameters()}
-        inner_optimizer = optim.SGD(task_model.parameters(), lr=alpha)
+        task = OmniglotTask('train', n)
+        theta_i = compute_adapted_theta(net,
+                                        theta, task, k, alpha, inner_gradient_steps)
+        # this function has to sample k datapoints, batch process them with the given theta,
+        # calculate the loss, calculate a gradient of the params wrt this loss and
+        # update and return this theta. In addition, it has to be possible to backpropagate through this theta
+        x_test, y_test = task.sample(k)
+        test_loss = task.loss_fct(forward(net, theta_i, x_test), y_test)
+        acc_loss += test_loss.item()
+        # I think no create_graph=True is needed
+        grads = grad(test_loss, theta)
+        acc_meta_update = [current_update +
+                           g for current_update, g in zip(acc_meta_update, grads)]
 
-        task = get_task('train', n)
-        x, y = generate_k_samples_from_task(task, k)
-        train_loss = criterion(task_model(x), y)
-        # x and y have batch_size of n*k
-        # technically, get_task and generate_k_samples_from_task could easily be put into one function. However,
-        # this approach sticks closer to the original concept of a task that generates samples
-
-        # Inner loop update, currently only one step
-        inner_optimizer.zero_grad()
-        train_loss.backward()
-        inner_optimizer.step()
-
-        # Update meta loss
-        x_test, y_test = generate_k_samples_from_task(task, k)
-        logit = task_model(x_test)
-        if episode < 0:
-            viz_logit(x_test, y_test, torch.round(logit * 100))
-
-        test_loss = criterion(logit, y_test)
-        meta_loss += test_loss
-
-        # Update grad accumulation used for meta update
-        inner_optimizer.zero_grad()  # needed
-        test_loss.backward()
-        acc_grad = {name: acc_grad[name] + param.grad for name,
-                    param in task_model.named_parameters()}
-
-    last_losses.append(meta_loss.item())
-    if len(last_losses) == 100:
-        print(episode)
-        print(sum(last_losses) // 1)
-        last_losses = []
-    # print(acc_grad)
-    # theta = {name: param.data - beta * acc_grad[name]
-    #          # not sure about param vs param.data
-    #          for name, param in meta_model.named_parameters()}
-    # meta_model.load_state_dict(theta)
-    for name, param in meta_model.named_parameters():
-        param.data -= beta * acc_grad[name]
-
-    # checkpoint saving
-    if (episode % 1000 == 0) or (episode == n_episodes - 1):
-        checkpoint_path = os.path.join(
-            checkpoint_dir, f'model_episode_{episode}_loss_{meta_loss.item()}.pt')
-        torch.save({
-            'epoch': episode,
-            'model_state_dict': meta_model.state_dict()
-        }, checkpoint_path)
+    theta = [p - beta * upd for p, upd in zip(theta, acc_meta_update)]
+    print(acc_loss)

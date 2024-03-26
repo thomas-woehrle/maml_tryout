@@ -17,7 +17,7 @@ meta_model.load_state_dict(ckpt['model_state_dict'])
 criterion = nn.CrossEntropyLoss(reduction='sum')
 # TODO load checkpoint
 alpha = 0.4  # NOTE only makes sense to use same as alpha from training, right?
-n_evaluations = 2
+n_evaluations = 10
 n, k = 5, 1
 
 for i in range(n_evaluations):
@@ -28,15 +28,15 @@ for i in range(n_evaluations):
     inner_optimizer = optim.SGD(task_model.parameters(), lr=alpha)
 
     task = get_task('test', n)
-    # Evaluation uses 3 steps
-    for i in range(3):
-        x, y = generate_k_samples_from_task(task, k)
-        train_loss = criterion(task_model(x), y)
+    # # Evaluation uses 3 steps
+    # for j in range(3):
+    #     x, y = generate_k_samples_from_task(task, k)
+    #     train_loss = criterion(task_model(x), y)
 
-        # Inner loop update, currently only one step
-        inner_optimizer.zero_grad()
-        train_loss.backward()
-        inner_optimizer.step()
+    #     # Inner loop update, currently only one step
+    #     inner_optimizer.zero_grad()
+    #     train_loss.backward()
+    #     inner_optimizer.step()
 
     # evaluation of capabilities after training
     x, y = generate_k_samples_from_task(task, 1)
@@ -44,9 +44,9 @@ for i in range(n_evaluations):
     probs = nn.Softmax(dim=1)(logits)
     pred = torch.argmax(logits, dim=1)
     print(i)
-    print(logits)
-    print(probs)
+    # print(logits)
+    # print(probs)
     print(pred)
     print(y)
     test_loss = criterion(task_model(x), y)
-    print(test_loss)
+    # print(test_loss)
