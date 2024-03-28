@@ -49,6 +49,7 @@ def generate_k_samples_from_task(task: List[str], k):
 class OmniglotTask():
     def __init__(self, train_or_test: str, n: int):
         self.loss_fct = nn.CrossEntropyLoss(reduction='sum')
+        # use reduction='mean' instead ?
 
         if train_or_test == 'train':
             self.chars = random.sample(train_chars, k=n)
