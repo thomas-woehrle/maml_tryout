@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import random
-from alt_omniglot_net import OmniglotNet
 from models import OmniglotModel
 from tasks import get_task, generate_k_samples_from_task
 
