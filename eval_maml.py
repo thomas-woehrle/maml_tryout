@@ -3,6 +3,7 @@ import copy
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import random
 from alt_omniglot_net import OmniglotNet
 from models import OmniglotModel
 from tasks import get_task, generate_k_samples_from_task
@@ -14,7 +15,7 @@ ckpt_path = parser.parse_args().ckpt_path
 ckpt = torch.load(ckpt_path)
 
 meta_model = OmniglotModel(5)
-print(ckpt['test_chars'][:10])
+test_chars = ckpt['test_chars']
 meta_model.load_state_dict(ckpt['model_state_dict'])
 criterion = nn.CrossEntropyLoss(reduction='sum')
 # TODO load checkpoint
@@ -29,7 +30,7 @@ for i in range(n_evaluations):
                       param in task_model.named_parameters()}
     inner_optimizer = optim.SGD(task_model.parameters(), lr=alpha)
 
-    task = get_task('test', n)
+    task = random.sample(test_chars, k=n)
     # Evaluation uses 3 steps
     for j in range(3):
         x, y = generate_k_samples_from_task(task, k)
@@ -46,9 +47,6 @@ for i in range(n_evaluations):
     probs = nn.Softmax(dim=1)(logits)
     pred = torch.argmax(logits, dim=1)
     print(i)
-    # print(logits)
-    # print(probs)
     print(pred)
     print(y)
     test_loss = criterion(task_model(x), y)
-    # print(test_loss)
