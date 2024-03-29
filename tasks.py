@@ -18,7 +18,8 @@ class OmniglotTask(MamlTask):
         self.chars = chars
         self.k = k
         self.device = device
-        self._loss_fct = nn.CrossEntropyLoss()  # NOTE reduction=... ?
+        self._loss_fct = nn.CrossEntropyLoss(
+            reduction='sum')  # NOTE reduction=... ?
 
     def sample(self):
         x = []  # will be transformed to a tensor later

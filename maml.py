@@ -5,7 +5,8 @@ from typing import Callable
 
 
 def std_log(episode, loss):
-    print(f'{episode}: {loss}')
+    if episode % 100 == 0:
+        print(f'{episode}: {loss}')
 
 
 def compute_adapted_theta(model: MamlModel, theta, task: MamlTask, alpha, inner_gradient_steps):
@@ -26,7 +27,7 @@ def compute_adapted_theta(model: MamlModel, theta, task: MamlTask, alpha, inner_
 # I should think about also passing a MetaOptimizer
 def maml_learn(num_episodes: int, meta_batch_size: int, inner_gradient_steps: int, alpha: float, beta: float,
                # , log_fct: callable[[int, int], ...]):
-               sample_task: Callable[[], MamlTask], model: MamlModel, checkpoint_fct: Callable[[int, int], any], episode_logger: Callable[[int, int], any] = std_log):
+               sample_task: Callable[[], MamlTask], model: MamlModel, checkpoint_fct: Callable[[list[int], int, int], any], episode_logger: Callable[[int, int], any] = std_log):
     theta = model.get_init_params()  # should be list of tensors
 
     for episode in range(num_episodes):
@@ -44,5 +45,5 @@ def maml_learn(num_episodes: int, meta_batch_size: int, inner_gradient_steps: in
                                g for current_update, g in zip(acc_meta_update, grads)]
 
         theta = [p - beta * upd for p, upd in zip(theta, acc_meta_update)]
-        checkpoint_fct(episode, acc_loss)
+        checkpoint_fct(theta, episode, acc_loss)
         episode_logger(episode, acc_loss)

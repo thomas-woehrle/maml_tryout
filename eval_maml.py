@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import random
 from models import OmniglotModel
-from tasks import get_task, generate_k_samples_from_task
+from tasks import OmniglotTask
 
 parser = argparse.ArgumentParser()
 parser.add_argument('ckpt_path')
@@ -29,11 +29,12 @@ for i in range(n_evaluations):
                       param in task_model.named_parameters()}
     inner_optimizer = optim.SGD(task_model.parameters(), lr=alpha)
 
-    task = random.sample(test_chars, k=n)
+    task = OmniglotTask(random.sample(test_chars, k=n), k, 'cpu')
     # Evaluation uses 3 steps
     for j in range(3):
-        x, y = generate_k_samples_from_task(task, k)
-        train_loss = criterion(task_model(x), y)
+        x, y = task.sample()
+        theta = [p for p in task_model.parameters()]
+        train_loss = criterion(task_model(x, theta), y)
 
         # Inner loop update, currently only one step
         inner_optimizer.zero_grad()
@@ -41,11 +42,12 @@ for i in range(n_evaluations):
         inner_optimizer.step()
 
     # evaluation of capabilities after training
-    x, y = generate_k_samples_from_task(task, 1)
-    logits = task_model(x)
+    theta = [p for p in task_model.parameters()]
+    x, y = task.sample()
+    logits = task_model(x, theta)
     probs = nn.Softmax(dim=1)(logits)
     pred = torch.argmax(logits, dim=1)
     print(i)
     print(pred)
     print(y)
-    test_loss = criterion(task_model(x), y)
+    test_loss = criterion(logits, y)

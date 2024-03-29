@@ -38,6 +38,8 @@ class OmniglotModel(MamlModel):
         self.running_var_9 = torch.ones(64)
 
     def forward(self, x, theta, is_train=True):
+        # TODO if is_train=False but the evaluation takes place on a new instance,
+        # then the running_mean has to be taken from somewhere the savedtheta
         # Convolutional Layers with Batch Normalization
         x = F.conv2d(x, theta[0], theta[1])
         x = F.batch_norm(
