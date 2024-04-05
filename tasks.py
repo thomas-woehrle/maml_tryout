@@ -1,3 +1,4 @@
+import ast
 import cv2
 import os
 import pandas as pd
@@ -5,7 +6,7 @@ import random
 import torch
 import torch.nn as nn
 from interfaces import MamlTask
-from rowfollow_utils import pre_process_image
+from rowfollow_utils import pre_process_image, gaussian_heatmap
 from torchvision import transforms
 
 TRANSFORM = transforms.Compose([
@@ -54,17 +55,34 @@ class RowfollowTask(MamlTask):
             os.path.join(bag_path, 'right_cam', 'labels.csv'))
         self.labels = pd.concat([df_left, df_right], keys=[
                                 'left_cam', 'right_cam'], names=['cam_side']).reset_index(level=0).reset_index(drop=True)
+        self._loss_fct = nn.KLDivLoss(reduction='batchmean')
 
     def sample(self, mode) -> tuple[torch.Tensor, torch.Tensor]:
+        import matplotlib.pyplot as plt
         # NOTE for supervised version, the mode does not play a role
         samples = self.labels.sample(self.k)
+        x = []
+        y = []
 
         for idx, sample in samples.iterrows():
             image_path = os.path.join(
                 self.bag_path, sample.cam_side, sample.image_name)
-            vp, ll, lr = sample.vp, sample.ll, sample.lr
+            vp, ll, lr = ast.literal_eval(sample.vp), ast.literal_eval(
+                sample.ll), ast.literal_eval(sample.lr)
             pre_processed_image, _ = pre_process_image(image_path)
             pre_processed_image = torch.from_numpy(
                 pre_processed_image)  # TODO add device
+            x.append(pre_processed_image)
             # this can be passed as is to the model as input x
-            # TODO create x_gt i.e. a heatmap for each keypoint of size 56x80 i believe
+            vp_gt = gaussian_heatmap(vp)
+            ll_gt = gaussian_heatmap(ll)
+            lr_gt = gaussian_heatmap(lr)
+            y.append(torch.stack([vp_gt, ll_gt, lr_gt]))
+
+        x = torch.stack(x)
+        y = torch.stack(y)
+
+        return x, y  # TODO add device handling
+
+    def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor, mode):
+        return super().calc_loss(x_hat, y, mode)
