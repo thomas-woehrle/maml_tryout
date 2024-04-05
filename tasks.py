@@ -1,9 +1,11 @@
 import cv2
 import os
+import pandas as pd
 import random
 import torch
 import torch.nn as nn
 from interfaces import MamlTask
+from rowfollow_utils import pre_process_image
 from torchvision import transforms
 
 TRANSFORM = transforms.Compose([
@@ -39,3 +41,30 @@ class OmniglotTask(MamlTask):
 
     def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor):
         return self._loss_fct(x_hat, y)
+
+
+class RowfollowTask(MamlTask):
+    def __init__(self, bag_path: str, k: int):
+        # NOTE in self-supervised version, the image names should be a property as well
+        self.bag_path = bag_path
+        self.k = k
+        df_left = pd.read_csv(
+            os.path.join(bag_path, 'left_cam', 'labels.csv'))
+        df_right = pd.read_csv(
+            os.path.join(bag_path, 'right_cam', 'labels.csv'))
+        self.labels = pd.concat([df_left, df_right], keys=[
+                                'left_cam', 'right_cam'], names=['cam_side']).reset_index(level=0).reset_index(drop=True)
+
+    def sample(self, mode) -> tuple[torch.Tensor, torch.Tensor]:
+        # NOTE for supervised version, the mode does not play a role
+        samples = self.labels.sample(self.k)
+
+        for idx, sample in samples.iterrows():
+            image_path = os.path.join(
+                self.bag_path, sample.cam_side, sample.image_name)
+            vp, ll, lr = sample.vp, sample.ll, sample.lr
+            pre_processed_image, _ = pre_process_image(image_path)
+            pre_processed_image = torch.from_numpy(
+                pre_processed_image)  # TODO add device
+            # this can be passed as is to the model as input x
+            # TODO create x_gt i.e. a heatmap for each keypoint of size 56x80 i believe
