@@ -6,11 +6,11 @@ class MamlModel(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def get_init_params(self) -> list[torch.Tensor]:
-        """Test doc string"""
+    def get_initial_state(self):
+        """Should return params, buffers TODO documentation"""
         raise RuntimeError('Subclass and implement this function')
 
-    def forward(self, x: torch.Tensor, theta: list[torch.Tensor], is_train=True) -> torch.Tensor:
+    def func_forward(self, x: torch.Tensor, params, buffers) -> torch.Tensor:
         raise RuntimeError('Subclass and implement this function')
 
 
@@ -18,8 +18,9 @@ class MamlTask():
     def __init__(self):
         pass
 
-    def sample(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, mode) -> tuple[torch.Tensor, torch.Tensor]:
+        """mode: 'query' or 'support'"""
         raise RuntimeError('Subclass and implement this function')
 
-    def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor):
+    def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor, mode):
         raise RuntimeError('Subclass and implement this function')
