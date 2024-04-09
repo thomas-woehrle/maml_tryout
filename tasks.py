@@ -45,7 +45,7 @@ class OmniglotTask(MamlTask):
 
 
 class RowfollowTask(MamlTask):
-    def __init__(self, bag_path: str, k: int):
+    def __init__(self, bag_path: str, k: int, device: torch.device):
         # NOTE in self-supervised version, the image names should be a property as well
         self.bag_path = bag_path
         self.k = k
@@ -56,6 +56,7 @@ class RowfollowTask(MamlTask):
         self.labels = pd.concat([df_left, df_right], keys=[
                                 'left_cam', 'right_cam'], names=['cam_side']).reset_index(level=0).reset_index(drop=True)
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')
+        self.device = device
 
     def sample(self, mode) -> tuple[torch.Tensor, torch.Tensor]:
         import matplotlib.pyplot as plt
@@ -82,7 +83,8 @@ class RowfollowTask(MamlTask):
         x = torch.stack(x)
         y = torch.stack(y)
 
-        return x, y  # TODO add device handling
+        return x.to(self.device), y.to(self.device)  # TODO add device handling
 
     def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor, mode):
+        # TODO
         return super().calc_loss(x_hat, y, mode)
