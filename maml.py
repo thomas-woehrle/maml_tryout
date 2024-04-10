@@ -5,7 +5,7 @@ from typing import Callable
 
 
 def std_log(episode, loss):
-    if episode % 100 == 0:
+    if episode % 1 == 0:
         print(f'{episode}: {loss}')
 
 
@@ -14,9 +14,9 @@ def inner_loop_update(model: MamlModel, params, buffers, task: MamlTask, alpha, 
     x_support, y_support = task.sample('support')
     x_hat = model.func_forward(x_support, params, buffers)
     train_loss = task.calc_loss(x_hat, y_support, 'support')
-    grads = grad(train_loss, params, create_graph=True)
+    grads = grad(train_loss, params.values(), create_graph=True)
     # create_graph=True should enable second order, also leads to slower execution
-    params_i = {n: p - alpha * g for (n, p), g in zip(params, grads)}
+    params_i = {n: p - alpha * g for (n, p), g in zip(params.items(), grads)}
     return params_i
 
 # TODO meaningful typing
@@ -33,7 +33,7 @@ def maml_learn(num_episodes: int, meta_batch_size: int, inner_gradient_steps: in
     params, buffers = model.get_initial_state()
 
     for episode in range(num_episodes):
-        acc_meta_update = {n: torch.zeros_like(p) for n, p in params}
+        acc_meta_update = {n: torch.zeros_like(p) for n, p in params.items()}
         acc_loss = 0
         for i in range(meta_batch_size):
             task = sample_task()
@@ -43,11 +43,11 @@ def maml_learn(num_episodes: int, meta_batch_size: int, inner_gradient_steps: in
             test_loss = task.calc_loss(
                 model.func_forward(x_query, params_i, buffers), y_query, 'query')
             acc_loss += test_loss.item()
-            grads = grad(test_loss, params)
+            grads = grad(test_loss, params.values())
             acc_meta_update = {n: current_update +
-                               g for (n, current_update), g in zip(acc_meta_update, grads)}
+                               g for (n, current_update), g in zip(acc_meta_update.items(), grads)}
 
         params = {n: p - beta *
-                  upd for (n, p), upd in zip(params, acc_meta_update)}
+                  upd for (n, p), (_, upd) in zip(params.items(), acc_meta_update.items())}
         checkpoint_fct(params, buffers, episode, acc_loss)
         episode_logger(episode, acc_loss)

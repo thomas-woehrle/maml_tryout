@@ -5,6 +5,7 @@ import pandas as pd
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from interfaces import MamlTask
 from rowfollow_utils import pre_process_image, gaussian_heatmap
 from torchvision import transforms
@@ -72,7 +73,7 @@ class RowfollowTask(MamlTask):
                 sample.ll), ast.literal_eval(sample.lr)
             pre_processed_image, _ = pre_process_image(image_path)
             pre_processed_image = torch.from_numpy(
-                pre_processed_image)  # TODO add device
+                pre_processed_image)
             x.append(pre_processed_image)
             # this can be passed as is to the model as input x
             vp_gt = gaussian_heatmap(vp)
@@ -83,8 +84,14 @@ class RowfollowTask(MamlTask):
         x = torch.stack(x)
         y = torch.stack(y)
 
-        return x.to(self.device), y.to(self.device)  # TODO add device handling
+        return x.to(self.device), y.to(self.device)
 
     def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor, mode):
-        # TODO
-        return super().calc_loss(x_hat, y, mode)
+        """
+        x_hat: Should be passed as logits, as the model outputs it, i.e. no softmax applied
+        y: Is expected as distribution. sample() returns it as such atm
+        """
+        # NOTE for supervised version, the mode does not play a role
+        x_hat = F.log_softmax(x_hat.view(
+            *x_hat.size()[:2], -1), 2).view_as(x_hat)
+        return self._loss_fct(x_hat[:, 0], y[:, 0]) + self._loss_fct(x_hat[:, 1], y[:, 1]) + self._loss_fct(x_hat[:, 2], y[:, 2])

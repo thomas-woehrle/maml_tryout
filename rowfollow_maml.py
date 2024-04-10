@@ -11,7 +11,7 @@ from rowfollow_utils import get_train_and_test_bags
 def get_checkpoint_dir():
     now = datetime.datetime.now()
     formatted_time = now.strftime("%Y_%m_%d-%H_%M_%S")
-    checkpoint_dir = './checkpoints/rowfollow_maml' + formatted_time
+    checkpoint_dir = './checkpoints/rowfollow_maml/' + formatted_time
     os.makedirs(checkpoint_dir, exist_ok=True)
     return checkpoint_dir
 
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     data_dir = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/'
     device = torch.device('cpu')
 
-    num_episodes = 100
+    num_episodes = 10000
     meta_batch_size = 4
     inner_gradient_steps = 1
     alpha = 0.4
@@ -57,4 +57,4 @@ if __name__ == '__main__':
     k = 4
 
     main(data_dir, num_episodes, meta_batch_size,
-         inner_gradient_steps, alpha, beta, k)
+         inner_gradient_steps, alpha, beta, k, device)

@@ -135,7 +135,7 @@ class RowfollowModel(MamlModel):
         return x
 
     def func_forward(self, x: torch.Tensor, params, buffers) -> torch.Tensor:
-        return torch.func.functional(self, (params, buffers), x)
+        return torch.func.functional_call(self, (params, buffers), x)
 
     def get_initial_state(self):
         params = {n: p for n, p in self.named_parameters()}
