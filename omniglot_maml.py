@@ -30,30 +30,21 @@ def main(n, k, num_episodes, meta_batch_size, inner_gradient_steps, alpha, beta,
 
     ckpt_dir = get_checkpoint_dir()
 
-    def checkpoint_fct(theta, episode, loss):
+    def checkpoint_fct(params, buffers, episode, loss):
         if not episode % 1000 == 0 and not episode == num_episodes - 1:
             return
-        state_dict = {n: p for (n, _), p in zip(
-            omniglotModel.named_parameters(), theta)}
-        # this makes it possible to not have to use the named_parameters everywhere
-        # relies on the order structure .named_parameters() returns
-        state_dict['net.1.running_mean'] = omniglotModel.running_mean_1
-        state_dict['net.1.running_var'] = omniglotModel.running_var_1
-        state_dict['net.5.running_mean'] = omniglotModel.running_mean_5
-        state_dict['net.5.running_var'] = omniglotModel.running_var_5
-        state_dict['net.9.running_mean'] = omniglotModel.running_mean_9
-        state_dict['net.9.running_var'] = omniglotModel.running_var_9
+
+        state_dict = params | buffers
         torch.save(
             {
                 'model_state_dict': state_dict,
-                # TODO rework saving of test_chars vs train_chars at train time -> see also comment in tasks.py
                 'train_chars': train_chars,
                 'test_chars': test_chars
             }, os.path.join(ckpt_dir, f'ep{episode}_loss{loss}.pt')
         )
 
-    theta = maml_learn(num_episodes, meta_batch_size, inner_gradient_steps,
-                       alpha, beta, sample_task, omniglotModel, checkpoint_fct)
+    maml_learn(num_episodes, meta_batch_size, inner_gradient_steps,
+               alpha, beta, sample_task, omniglotModel, checkpoint_fct)
 
 # TODO double-check if train and test chars are the same in checkpoints
 
