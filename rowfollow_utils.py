@@ -50,6 +50,7 @@ def gaussian_heatmap(center, image_size=(80, 56), sig=10, downscale=4):
 
 def get_train_and_test_bags(directory, exclude_first_x, exclude_last_y):
     days = glob.glob(os.path.join(directory, '*/'))
+    days = sorted(days)
 
     train_days = days[exclude_first_x:-exclude_last_y]
     test_days = days[:exclude_first_x] + days[-exclude_last_y:]

@@ -25,7 +25,6 @@ def main(data_dir, num_episodes, meta_batch_size, inner_gradient_steps, alpha, b
     model = RowfollowModel()
     model.to(device)
 
-    # TODO loss calculation in the task
     ckpt_dir = get_checkpoint_dir()
 
     def checkpoint_fct(params, buffers, episode, loss):

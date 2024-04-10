@@ -60,7 +60,6 @@ class RowfollowTask(MamlTask):
         self.device = device
 
     def sample(self, mode) -> tuple[torch.Tensor, torch.Tensor]:
-        import matplotlib.pyplot as plt
         # NOTE for supervised version, the mode does not play a role
         samples = self.labels.sample(self.k)
         x = []
