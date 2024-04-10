@@ -24,11 +24,13 @@ class OmniglotModel(MamlModel):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2),
             nn.Flatten(),
-            nn.Linear(64, num_classes)
         )
+        self.head = nn.Linear(64, num_classes)
 
     def forward(self, x):
-        return self.net(x)
+        x = self.net(x)
+        x = self.head(x)
+        return x
 
     def func_forward(self, x: torch.Tensor, params, buffers):
         return torch.func.functional_call(self, (params, buffers), x)

@@ -3,6 +3,7 @@ import os
 import random
 import torch
 from maml import maml_learn
+from anil_maml import anil_learn
 from models import OmniglotModel
 from omniglot_helper import get_all_chars
 from tasks import OmniglotTask

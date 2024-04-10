@@ -14,9 +14,13 @@ def inner_loop_update(model: MamlModel, params, buffers, task: MamlTask, alpha, 
     x_support, y_support = task.sample('support')
     x_hat = model.func_forward(x_support, params, buffers)
     train_loss = task.calc_loss(x_hat, y_support, 'support')
-    grads = grad(train_loss, params.values(), create_graph=True)
+    # NOTE in ANIL, here only calculate the gradient for the last layers
+    head = {n: p for n, p in params.items() if n.startswith('head')
+            }  # NOTE assumes that head is assigned via self.head = ...
+    head_grads = grad(train_loss, head.values(), create_graph=True)
     # create_graph=True should enable second order, also leads to slower execution
-    params_i = {n: p - alpha * g for (n, p), g in zip(params.items(), grads)}
+    head_i = {n: p - alpha * g for (n, p), g in zip(head.items(), head_grads)}
+    params_i = {**params, **head_i}
     return params_i
 
 # TODO meaningful typing
@@ -27,7 +31,7 @@ def inner_loop_update(model: MamlModel, params, buffers, task: MamlTask, alpha, 
 # I should think about also passing a MetaOptimizer
 
 
-def maml_learn(num_episodes: int, meta_batch_size: int, inner_gradient_steps: int, alpha: float, beta: float,
+def anil_learn(num_episodes: int, meta_batch_size: int, inner_gradient_steps: int, alpha: float, beta: float,
                sample_task: Callable[[], MamlTask], model: MamlModel, checkpoint_fct,
                episode_logger: Callable[[int, int], any] = std_log):
     params, buffers = model.get_initial_state()
