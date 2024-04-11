@@ -27,7 +27,6 @@ def main():
     model = RowfollowModel()
     model.load_state_dict(ckpt['model_state_dict'])
     model.to(device)
-    model.eval()
 
     ###
 
@@ -36,29 +35,31 @@ def main():
     ll_hm_array = []
     vp_hm_array = []
 
-    # image_dir = os.path.join(bags[0], 'left_cam')
-    # image_dir = image_dir.replace(
-    #     '/home/woehrle2/Documents/data', '/Users/tomwoehrle/Documents/research_assistance')
-    # NOTE change to test_bags for true test:
-    # TODO try out and think about k
-
-    bag_path = random.choice(train_bags).replace(
-        '/home/woehrle2/Documents/data', '/Users/tomwoehrle/Documents/research_assistance')
+    # bag_path = random.choice(train_bags).replace(
+    #    '/home/woehrle2/Documents/data', '/Users/tomwoehrle/Documents/research_assistance')
+    # bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220714_cornfield/ts_2022_07_14_12h17m57s_two_random/'
+    # bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/ts_2022_06_03_02h54m54s/'
+    # bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20221006_cornfield/ts_2022_10_06_10h06m49s_two_random/'
+    bag_path = ...
     print(bag_path)
-    task = RowfollowTask(bag_path, 2, device)
+    k = 10
+    task = RowfollowTask(bag_path, k, device)
     params, buffers = model.get_initial_state()
-    inner_gradient_steps = 1
+    inner_gradient_steps = 2
     for i in range(inner_gradient_steps):
         # NOTE has to be done like this, while inner_loop_update is fixed at 1 gradient step
         # not exactly how maml testing works, cause every time new sample i.e. k = k * inner_gradient_steps
         params = inner_loop_update(
             model, params, buffers, task, 0.4, 'doesnt matter')
     model.load_state_dict(params | buffers)
+    # model.eval() # NOTE why not needed/working?
 
-    n_tests = 20
+    n_tests = 40
     for i in range(n_tests):
-        cam = random.choice(['left_cam', 'right_cam'])
-        image_name = random.choice(get_filenames(os.path.join(bag_path, cam)))
+        # cam = random.choice(['left_cam', 'right_cam'])
+        cam = 'left_cam'
+        # image_name = random.choice(get_filenames(os.path.join(bag_path, cam)))
+        image_name = sorted(get_filenames(os.path.join(bag_path, cam)))[i]
         full_path = os.path.join(bag_path, cam, image_name)
         print(full_path)
         np_array, image = process_image(full_path)
@@ -84,8 +85,10 @@ def main():
     lr_hm_plotinfo_array = [PlotInfo(
         hm, isImage=False, gradientColor="blue", vmin=0, vmax=1) for hm in lr_hm_array]
 
+    title = f'k={
+        k}, steps*={inner_gradient_steps}, gt_sig={gt_sig}, no model.eval()'
     plot_multiple_color_maps(
-        img_plotinfo_array, vp_hm_plotinfo_array, ll_hm_plotinfo_array, lr_hm_plotinfo_array)
+        img_plotinfo_array, vp_hm_plotinfo_array, ll_hm_plotinfo_array, lr_hm_plotinfo_array, full_title=title)
 
 
 if __name__ == '__main__':
