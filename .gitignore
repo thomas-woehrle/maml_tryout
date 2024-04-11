@@ -1,4 +1,5 @@
-/__pycache__
+**/__pycache__
 /omniglot
 /std_venv
 /checkpoints
+/output
