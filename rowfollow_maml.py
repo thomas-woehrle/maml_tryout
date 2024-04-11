@@ -2,11 +2,12 @@ import datetime
 import os
 import random
 import torch
-from maml import maml_learn
 from anil_maml import anil_learn
+from maml import maml_learn
 from models import RowfollowModel
-from tasks import RowfollowTask
 from rowfollow_utils import get_train_and_test_bags
+from shared_utils import std_checkpoint_fct
+from tasks import RowfollowTask
 
 
 def get_checkpoint_dir():
@@ -29,18 +30,8 @@ def main(data_dir, num_episodes, meta_batch_size, inner_gradient_steps, alpha, b
     ckpt_dir = get_checkpoint_dir()
 
     def checkpoint_fct(params, buffers, episode, loss):
-        if not episode % 1000 == 0 and not episode == num_episodes - 1:
-            return
-
-        state_dict = params | buffers
-        torch.save(
-            {
-                'model_state_dict': state_dict,
-                'train_bags': train_bags,
-                'test_bags': test_bags
-                # TODO add sample_task function?, add hyperparameters?
-            }, os.path.join(ckpt_dir, f'ep{episode}_loss{loss}.pt')
-        )
+        std_checkpoint_fct(episode, loss, params, buffers, train_bags, test_bags, 'RowfollowTask', num_episodes,
+                           meta_batch_size, inner_gradient_steps, alpha, beta, k, ckpt_dir, None)
 
     anil_learn(num_episodes, meta_batch_size, inner_gradient_steps,
                alpha, beta, sample_task, model, checkpoint_fct)
