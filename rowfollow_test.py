@@ -86,7 +86,7 @@ def main():
         hm, isImage=False, gradientColor="blue", vmin=0, vmax=1) for hm in lr_hm_array]
 
     title = f'k={
-        k}, steps*={inner_gradient_steps}, gt_sig={gt_sig}, no model.eval()'
+        k}, steps*={inner_gradient_steps}, no model.eval()'
     plot_multiple_color_maps(
         img_plotinfo_array, vp_hm_plotinfo_array, ll_hm_plotinfo_array, lr_hm_plotinfo_array, full_title=title)
 
