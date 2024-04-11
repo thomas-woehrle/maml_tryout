@@ -37,6 +37,7 @@ def main(data_dir, num_episodes, meta_batch_size, inner_gradient_steps, alpha, b
                 'model_state_dict': state_dict,
                 'train_bags': train_bags,
                 'test_bags': test_bags
+                # TODO add sample_task function?, add hyperparameters?
             }, os.path.join(ckpt_dir, f'ep{episode}_loss{loss}.pt')
         )
 
