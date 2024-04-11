@@ -27,7 +27,7 @@ def main():
     model = RowfollowModel()
     model.load_state_dict(ckpt['model_state_dict'])
     model.to(device)
-    model.eval()
+    model.eval()  # does it already need to be set into eval here ?
 
     ###
 

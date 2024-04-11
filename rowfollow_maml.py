@@ -3,6 +3,7 @@ import os
 import random
 import torch
 from maml import maml_learn
+from anil_maml import anil_learn
 from models import RowfollowModel
 from tasks import RowfollowTask
 from rowfollow_utils import get_train_and_test_bags
@@ -41,7 +42,7 @@ def main(data_dir, num_episodes, meta_batch_size, inner_gradient_steps, alpha, b
             }, os.path.join(ckpt_dir, f'ep{episode}_loss{loss}.pt')
         )
 
-    maml_learn(num_episodes, meta_batch_size, inner_gradient_steps,
+    anil_learn(num_episodes, meta_batch_size, inner_gradient_steps,
                alpha, beta, sample_task, model, checkpoint_fct)
 
 
