@@ -1,24 +1,15 @@
-import datetime
-import os
 import random
 import torch
-from anil_maml import anil_learn
 from maml import maml_learn
 from models import RowfollowModel
 from rowfollow_utils import get_train_and_test_bags
-from shared_utils import std_checkpoint_fct
+from shared_utils import std_checkpoint_fct, get_base_parser, get_ckpt_dir
 from tasks import RowfollowTask
 
 
-def get_checkpoint_dir():
-    now = datetime.datetime.now()
-    formatted_time = now.strftime("%Y_%m_%d-%H_%M_%S")
-    checkpoint_dir = './checkpoints/rowfollow_maml/' + formatted_time
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    return checkpoint_dir
-
-
-def main(data_dir, num_episodes, meta_batch_size, inner_gradient_steps, alpha, beta, k, device=torch.device('cpu')):
+def main(num_episodes: int, meta_batch_size: int, k: int, inner_gradient_steps: int,
+         alpha: float, beta: float, ckpt_dir: str, device: torch.device,
+         data_dir: str, anil: bool, sigma_scheduling: bool):
     train_bags, test_bags = get_train_and_test_bags(data_dir, 4, 5)
 
     def sample_task():
@@ -27,26 +18,36 @@ def main(data_dir, num_episodes, meta_batch_size, inner_gradient_steps, alpha, b
     model = RowfollowModel()
     model.to(device)
 
-    ckpt_dir = get_checkpoint_dir()
-
     def checkpoint_fct(params, buffers, episode, loss):
         std_checkpoint_fct(episode, loss, params, buffers, train_bags, test_bags, 'RowfollowTask', num_episodes,
-                           meta_batch_size, inner_gradient_steps, alpha, beta, k, ckpt_dir, None)
+                           meta_batch_size, k, inner_gradient_steps, alpha, beta, anil, ckpt_dir, add_info={'sigma_scheduling': sigma_scheduling})
 
-    maml_learn(num_episodes, meta_batch_size, inner_gradient_steps,
+    maml_learn(anil, num_episodes, meta_batch_size, inner_gradient_steps,
                alpha, beta, sample_task, model, checkpoint_fct)
 
 
 if __name__ == '__main__':
-    data_dir = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/'
-    device = torch.device('cpu')
+    parser = get_base_parser()
+    parser.add_argument(
+        '--data_dir', type=str, help='The directory where the files in question are stored')
+    # TODO add data split to parser
+    parser.add_argument('--sigma_scheduling', action='store_true',
+                        help='Whether sigma scheduling should take place or not, as defined in the RowfollowTask (Default: False)')
+    # TODO add sigma scheduling parameters to parser
 
-    num_episodes = 60000
-    meta_batch_size = 4
-    inner_gradient_steps = 1
-    alpha = 0.4
-    beta = 0.001
-    k = 4
+    args = parser.parse_args()
 
-    main(data_dir, num_episodes, meta_batch_size,
-         inner_gradient_steps, alpha, beta, k, device)
+    ckpt_dir = get_ckpt_dir(args.ckpt_base_dir, args.anil, args.run_name)
+    device = torch.device(args.device)
+
+    main(num_episodes=args.num_episodes,
+         meta_batch_size=args.meta_batch_size,
+         k=args.k,
+         inner_gradient_steps=args.inner_gradient_steps,
+         alpha=args.alpha,
+         beta=args.beta,
+         ckpt_dir=ckpt_dir,
+         device=device,
+         data_dir=args.data_dir,
+         anil=args.anil,
+         sigma_scheduling=args.sigma_scheduling)

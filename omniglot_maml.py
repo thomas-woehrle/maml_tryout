@@ -1,7 +1,6 @@
 import datetime
 import os
 import random
-from anil_maml import anil_learn
 from maml import maml_learn
 from models import OmniglotModel
 from omniglot_utils import get_all_chars
@@ -50,6 +49,6 @@ if __name__ == '__main__':
     inner_gradient_steps = 1
     alpha = 0.4
     beta = 0.001
-
+    # TODO adjust to new variable structure of maml.py
     main(n, k, num_episodes, meta_batch_size,
          inner_gradient_steps, alpha, beta)
