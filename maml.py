@@ -9,9 +9,9 @@ def std_log(episode, loss):
         print(f'{episode}: {loss}')
 
 
-def inner_loop_update(model: MamlModel, params, buffers, task: MamlTask, alpha, inner_gradient_steps):
+def inner_loop_update(current_ep, model: MamlModel, params, buffers, task: MamlTask, alpha, inner_gradient_steps):
     inner_gradient_steps = 1  # NOTE assumption for now
-    x_support, y_support = task.sample('support')
+    x_support, y_support = task.sample('support', current_ep)
     x_hat = model.func_forward(x_support, params, buffers)
     train_loss = task.calc_loss(x_hat, y_support, 'support')
     grads = grad(train_loss, params.values(), create_graph=True)

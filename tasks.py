@@ -46,7 +46,7 @@ class OmniglotTask(MamlTask):
 
 
 class RowfollowTask(MamlTask):
-    def __init__(self, bag_path: str, k: int, device: torch.device):
+    def __init__(self, bag_path: str, k: int, num_episodes: int, device: torch.device):
         # NOTE in self-supervised version, the image names should be a property as well
         self.bag_path = bag_path
         self.k = k
@@ -58,9 +58,17 @@ class RowfollowTask(MamlTask):
                                 'left_cam', 'right_cam'], names=['cam_side']).reset_index(level=0).reset_index(drop=True)
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')
         self.device = device
+        self._num_episodes = num_episodes
+        self.START_SIGMA = 30
+        self.END_SIGMA = 1
 
-    def sample(self, mode) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, mode, current_ep) -> tuple[torch.Tensor, torch.Tensor]:
         # NOTE for supervised version, the mode does not play a role
+
+        sig = self.START_SIGMA \
+            - (self.START_SIGMA - self.END_SIGMA) \
+            * (current_ep / (0.9 * self._num_episodes))
+        sig = self.END_SIGMA if sig < self.END_SIGMA else sig
         samples = self.labels.sample(self.k)
         x = []
         y = []
@@ -75,9 +83,9 @@ class RowfollowTask(MamlTask):
                 pre_processed_image)
             x.append(pre_processed_image)
             # this can be passed as is to the model as input x
-            vp_gt = gaussian_heatmap(vp)
-            ll_gt = gaussian_heatmap(ll)
-            lr_gt = gaussian_heatmap(lr)
+            vp_gt = gaussian_heatmap(vp, sig=sig)
+            ll_gt = gaussian_heatmap(ll, sig=sig)
+            lr_gt = gaussian_heatmap(lr, sig=sig)
             y.append(torch.stack([vp_gt, ll_gt, lr_gt]))
 
         x = torch.stack(x)

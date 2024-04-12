@@ -22,7 +22,7 @@ def main(data_dir, num_episodes, meta_batch_size, inner_gradient_steps, alpha, b
     train_bags, test_bags = get_train_and_test_bags(data_dir, 4, 5)
 
     def sample_task():
-        return RowfollowTask(random.choice(train_bags), k, device)
+        return RowfollowTask(random.choice(train_bags), k, num_episodes, device)
 
     model = RowfollowModel()
     model.to(device)
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     data_dir = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/'
     device = torch.device('cpu')
 
-    num_episodes = 10000
+    num_episodes = 60000
     meta_batch_size = 4
     inner_gradient_steps = 1
     alpha = 0.4

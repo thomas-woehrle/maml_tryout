@@ -18,7 +18,7 @@ class MamlTask():
     def __init__(self):
         pass
 
-    def sample(self, mode) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, mode, current_ep) -> tuple[torch.Tensor, torch.Tensor]:
         """mode: 'query' or 'support'"""
         raise RuntimeError('Subclass and implement this function')
 
