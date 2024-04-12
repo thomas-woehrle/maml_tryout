@@ -33,7 +33,7 @@ def main(data_dir, num_episodes, meta_batch_size, inner_gradient_steps, alpha, b
         std_checkpoint_fct(episode, loss, params, buffers, train_bags, test_bags, 'RowfollowTask', num_episodes,
                            meta_batch_size, inner_gradient_steps, alpha, beta, k, ckpt_dir, None)
 
-    anil_learn(num_episodes, meta_batch_size, inner_gradient_steps,
+    maml_learn(num_episodes, meta_batch_size, inner_gradient_steps,
                alpha, beta, sample_task, model, checkpoint_fct)
 
 

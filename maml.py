@@ -37,9 +37,9 @@ def maml_learn(num_episodes: int, meta_batch_size: int, inner_gradient_steps: in
         acc_loss = 0
         for i in range(meta_batch_size):
             task = sample_task()
-            params_i = inner_loop_update(model,
+            params_i = inner_loop_update(episode, model,
                                          params, buffers, task, alpha, inner_gradient_steps)
-            x_query, y_query = task.sample('query')
+            x_query, y_query = task.sample('query', episode)
             test_loss = task.calc_loss(
                 model.func_forward(x_query, params_i, buffers), y_query, 'query')
             acc_loss += test_loss.item()
