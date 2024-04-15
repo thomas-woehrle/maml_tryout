@@ -83,3 +83,19 @@ def get_ckpt_dir(base_dir, anil, run_name):
     os.makedirs(ckpt_dir, exist_ok=True)
 
     return ckpt_dir
+
+
+def get_indices_from_pred(pred):
+    """
+    pred will have shape (batch_sizex3x56x80)  
+    """
+    batch_size = pred.shape[0]
+    flattened_indices = torch.argmax(pred.view(batch_size, 3, -1), dim=2)
+
+    height = 56
+    width = 80
+    y_coords = flattened_indices // width
+    x_coords = flattened_indices % width
+
+    indices = torch.stack((x_coords, y_coords), dim=2)
+    return indices

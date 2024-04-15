@@ -46,8 +46,9 @@ class OmniglotTask(MamlTask):
 
 
 class RowfollowTask(MamlTask):
-    def __init__(self, bag_path: str, k: int, num_episodes: int, device: torch.device):
+    def __init__(self, bag_path: str, k: int, num_episodes: int, device: torch.device, seed: int | None = None):
         # NOTE in self-supervised version, the image names should be a property as well
+        # TODO make sigma_scheduling yes/no a parameter
         self.bag_path = bag_path
         self.k = k
         df_left = pd.read_csv(
@@ -56,20 +57,24 @@ class RowfollowTask(MamlTask):
             os.path.join(bag_path, 'right_cam', 'labels.csv'))
         self.labels = pd.concat([df_left, df_right], keys=[
                                 'left_cam', 'right_cam'], names=['cam_side']).reset_index(level=0).reset_index(drop=True)
+        self.seed = seed
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')
         self.device = device
         self._num_episodes = num_episodes
         self.START_SIGMA = 30
         self.END_SIGMA = 1
+        self.sigma_scheduling = False
 
     def sample(self, mode, current_ep) -> tuple[torch.Tensor, torch.Tensor]:
         # NOTE for supervised version, the mode does not play a role
-
-        sig = self.START_SIGMA \
-            - (self.START_SIGMA - self.END_SIGMA) \
-            * (current_ep / (0.9 * self._num_episodes))
-        sig = self.END_SIGMA if sig < self.END_SIGMA else sig
-        samples = self.labels.sample(self.k)
+        if self.sigma_scheduling:
+            sig = self.START_SIGMA \
+                - (self.START_SIGMA - self.END_SIGMA) \
+                * (current_ep / (0.9 * self._num_episodes))
+            sig = self.END_SIGMA if sig < self.END_SIGMA else sig
+        else:
+            sig = 10
+        samples = self.labels.sample(self.k, random_state=self.seed)
         x = []
         y = []
 
