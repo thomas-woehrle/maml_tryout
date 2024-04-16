@@ -32,7 +32,7 @@ def get_data(base_path, df, device):
     return x, y
 
 
-def main(ckpt_path, bag_path, device):
+def calc_loss(ckpt_path, bag_path, device, seed):
     ckpt = torch.load(ckpt_path, map_location=device)
     model = RowfollowModel()
     model.load_state_dict(ckpt['model_state_dict'])
@@ -43,7 +43,6 @@ def main(ckpt_path, bag_path, device):
     current_ep = num_episodes - 1  # NOTE ??
     anil = ckpt.get('anil', False)
     inner_gradient_steps = 1
-    seed = 0
 
     task = RowfollowTask(bag_path, k, num_episodes, device, seed=seed)
     params, buffers = model.get_initial_state()
@@ -73,12 +72,9 @@ def main(ckpt_path, bag_path, device):
 
     loss = loss_fct(x_hat, y)
     loss = torch.sum(loss, dim=2).float()
-    loss = torch.mean(loss, dim=0)
-    print(loss)
     loss_on_frame = loss_fct(x_hat_on_frame, y)
     loss_on_frame = torch.sum(loss_on_frame, dim=2).float()
-    loss_on_frame = torch.mean(loss_on_frame, dim=0)
-    print(loss_on_frame)
+    return loss, loss_on_frame
 
 
 if __name__ == '__main__':
@@ -86,8 +82,27 @@ if __name__ == '__main__':
     parser.add_argument('ckpt_path', metavar='', type=str,
                         help='Path to the trained model parameters')
     parser.add_argument('bag_path')
+    parser.add_argument('--n_runs', default=10, type=int)
     # TODO add k, inner_gradient_steps as arguments
     args = parser.parse_args()
+    seed = 0
 
-    main(ckpt_path=args.ckpt_path, bag_path=args.bag_path,
-         device=torch.device('cpu'))
+    losses = []
+    losses_on_frame = []
+    for i in range(args.n_runs):
+        print('Run', i+1, 'out of', args.n_runs, 'starting...')
+        loss, loss_on_frame = calc_loss(ckpt_path=args.ckpt_path, bag_path=args.bag_path,
+                                        device=torch.device('cpu'), seed=seed+i)
+        losses.append(loss)
+        losses_on_frame.append(loss_on_frame)
+
+    losses = torch.cat(losses)
+    losses_on_frame = torch.cat(losses_on_frame)
+    print('Keypoints - Raw:')
+    print('Mean:', losses.mean(dim=0))
+    print('Variance:', losses.var(dim=0))
+    print('Std dev.:', torch.sqrt(losses.var(dim=0)))
+    print('Keypoints - On frame:')
+    print('Mean:', losses_on_frame.mean(dim=0))
+    print('Variance:', losses_on_frame.var(dim=0))
+    print('Std dev.:', torch.sqrt(losses_on_frame.var(dim=0)))
