@@ -8,7 +8,7 @@ import torch.nn as nn
 from maml import inner_loop_update_for_testing
 from models import RowfollowModel
 from rowfollow_utils import pre_process_image
-from shared_utils import get_indices_from_pred
+from shared_utils import get_indices_from_pred, get_coordinates_on_frame
 from tasks import RowfollowTask
 
 
@@ -59,10 +59,26 @@ def main(ckpt_path, bag_path, device):
 
     x_hat = get_indices_from_pred(
         model(x)) * 4
+
+    x_hat_on_frame = []
+    for pred in x_hat:
+        vp = pred[0]
+        ll = pred[1]
+        lr = pred[2]
+        vp = tuple(vp)
+        ll = get_coordinates_on_frame(vp, ll)
+        lr = get_coordinates_on_frame(vp, lr)
+        x_hat_on_frame.append(torch.tensor([vp, ll, lr]))
+    x_hat_on_frame = torch.stack(x_hat_on_frame)
+
     loss = loss_fct(x_hat, y)
     loss = torch.sum(loss, dim=2).float()
     loss = torch.mean(loss, dim=0)
     print(loss)
+    loss_on_frame = loss_fct(x_hat_on_frame, y)
+    loss_on_frame = torch.sum(loss_on_frame, dim=2).float()
+    loss_on_frame = torch.mean(loss_on_frame, dim=0)
+    print(loss_on_frame)
 
 
 if __name__ == '__main__':
