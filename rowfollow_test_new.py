@@ -12,6 +12,13 @@ from shared_utils import get_indices_from_pred, get_coordinates_on_frame
 from tasks import RowfollowTask
 
 
+def print_loss_info(losses: list, title):
+    print(title)
+    print('Mean:', losses.mean(dim=0))
+    print('Variance:', losses.var(dim=0))
+    print('Std dev.:', torch.sqrt(losses.var(dim=0)))
+
+
 def get_data(base_path, df, device):
     x = []
     y = []
@@ -32,23 +39,30 @@ def get_data(base_path, df, device):
     return x, y
 
 
-def calc_loss(ckpt_path, bag_path, device, seed):
+def calc_loss(ckpt_path, bag_path, device, seed, no_finetuning, k, inner_gradient_steps, alpha):
     ckpt = torch.load(ckpt_path, map_location=device)
     model = RowfollowModel()
     model.load_state_dict(ckpt['model_state_dict'])
     model.to(device)
 
-    k = 5
-    num_episodes = ckpt.get('num_episodes', 60_000)
-    current_ep = num_episodes - 1  # NOTE ??
     anil = ckpt.get('anil', False)
-    inner_gradient_steps = 1
+    sigma_scheduling = ckpt.get('sigma_scheduling', False)
 
-    task = RowfollowTask(bag_path, k, num_episodes, device, seed=seed)
-    params, buffers = model.get_initial_state()
-    params = inner_loop_update_for_testing(anil, current_ep,
-                                           model, params, buffers, task, 0.4, inner_gradient_steps)
-    model.load_state_dict(params | buffers)
+    if not no_finetuning:
+        params, buffers = model.get_initial_state()
+        if sigma_scheduling:
+            num_episodes = ckpt.get('num_episodes', 60_000)
+            current_ep = num_episodes - 1  # NOTE ??
+            task = RowfollowTask(
+                bag_path, k, device=device, sigma_scheduling=sigma_scheduling, num_episodes=num_episodes, seed=seed)
+            params = inner_loop_update_for_testing(anil, current_ep,
+                                                   model, params, buffers, task, alpha, inner_gradient_steps)
+        else:
+            task = RowfollowTask(bag_path, k, device, seed=seed)
+            params = inner_loop_update_for_testing(anil,
+                                                   model, params, buffers, task, alpha, inner_gradient_steps)
+        model.load_state_dict(params | buffers)
+
     # model.eval() # NOTE why not needed/working?
 
     labels = task.labels
@@ -74,7 +88,7 @@ def calc_loss(ckpt_path, bag_path, device, seed):
     loss = torch.sum(loss, dim=2).float()
     loss_on_frame = loss_fct(x_hat_on_frame, y)
     loss_on_frame = torch.sum(loss_on_frame, dim=2).float()
-    return loss, loss_on_frame
+    return loss, loss_on_frame, torch.mean(loss, dim=0), torch.mean(loss_on_frame, 0)
 
 
 if __name__ == '__main__':
@@ -83,26 +97,44 @@ if __name__ == '__main__':
                         help='Path to the trained model parameters')
     parser.add_argument('bag_path')
     parser.add_argument('--n_runs', default=10, type=int)
-    # TODO add k, inner_gradient_steps as arguments
+    parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--k', default=5, type=int)
+    parser.add_argument('--inner_gradient_steps', default=1, type=int)
+    parser.add_argument('--alpha', default=0.4, type=float)
+    parser.add_argument('--no_finetuning', default=False, type=bool)
     args = parser.parse_args()
-    seed = 0
 
-    losses = []
-    losses_on_frame = []
+    losses = []  # n_runsxNx3
+    losses_on_frame = []  # n_runsxNx3
+    mean_losses = []  # n_runsx3, where the Nx3 were reduced to 3 by taking the mean. means per run are stored here
+    mean_losses_on_frame = []  # n_runsx3
     for i in range(args.n_runs):
         print('Run', i+1, 'out of', args.n_runs, 'starting...')
-        loss, loss_on_frame = calc_loss(ckpt_path=args.ckpt_path, bag_path=args.bag_path,
-                                        device=torch.device('cpu'), seed=seed+i)
+        loss, loss_on_frame, mean_loss, mean_loss_on_frame = calc_loss(ckpt_path=args.ckpt_path,
+                                                                       bag_path=args.bag_path,
+                                                                       device=torch.device(
+                                                                           'cpu'),
+                                                                       # maybe device make this variable
+                                                                       seed=args.seed+i,
+                                                                       no_finetuning=args.no_finetuning,
+                                                                       k=args.k,
+                                                                       inner_gradient_steps=args.inner_gradient_steps,
+                                                                       alpha=args.alpha)
         losses.append(loss)
         losses_on_frame.append(loss_on_frame)
+        mean_losses.append(mean_loss)
+        mean_losses_on_frame.append(mean_loss_on_frame)
 
     losses = torch.cat(losses)
     losses_on_frame = torch.cat(losses_on_frame)
-    print('Keypoints - Raw:')
-    print('Mean:', losses.mean(dim=0))
-    print('Variance:', losses.var(dim=0))
-    print('Std dev.:', torch.sqrt(losses.var(dim=0)))
-    print('Keypoints - On frame:')
-    print('Mean:', losses_on_frame.mean(dim=0))
-    print('Variance:', losses_on_frame.var(dim=0))
-    print('Std dev.:', torch.sqrt(losses_on_frame.var(dim=0)))
+    mean_losses = torch.stack(mean_losses)
+    mean_losses_on_frame = torch.stack(mean_losses_on_frame)
+    print(losses.shape)
+    print(losses_on_frame.shape)
+    print(mean_losses.shape)
+    print(mean_losses_on_frame.shape)
+    print_loss_info(losses, 'Keypoints - raw - across runs')
+    print_loss_info(losses_on_frame, 'Keypoints - on frame - across runs')
+    print_loss_info(mean_losses, 'Keypoints - raw - between runs')
+    print_loss_info(mean_losses_on_frame,
+                    'Keypoints - on frame - between runs')

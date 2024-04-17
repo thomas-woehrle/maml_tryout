@@ -9,7 +9,7 @@ def std_log(episode, loss):
         print(f'{episode}: {loss}')
 
 
-def inner_loop_update_for_testing(anil, current_ep, model: MamlModel, params, buffers, task: MamlTask, alpha, inner_gradient_steps):
+def inner_loop_update_for_testing(anil, model: MamlModel, params, buffers, task: MamlTask, alpha, inner_gradient_steps, current_ep=-1):
     x_support, y_support = task.sample('support', current_ep)
     params_i = {n: p for n, p in params.items()}
     for i in range(inner_gradient_steps):
@@ -81,3 +81,5 @@ def maml_learn(anil, num_episodes: int, meta_batch_size: int, inner_gradient_ste
 # TODO meaningful typing
 # TODO meaningful inheritance
 # TODO I should think about also passing a MetaOptimizer
+# TODO create uniform config parameters type across train and test
+# TODO for rowfollow rename boolean variables
