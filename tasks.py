@@ -46,7 +46,7 @@ class OmniglotTask(MamlTask):
 
 
 class RowfollowTask(MamlTask):
-    def __init__(self, bag_path: str, k: int, device: torch.device, sigma_scheduling: bool = False, num_episodes: int = -1, seed: int | None = None):
+    def __init__(self, bag_path: str, k: int, device: torch.device, sigma: int = 10, sigma_scheduling: bool = False, num_episodes: int = -1, seed: int | None = None):
         # NOTE in self-supervised version, the image names should be a property as well
         # TODO make sigma_scheduling yes/no a parameter
         self.bag_path = bag_path
@@ -61,9 +61,10 @@ class RowfollowTask(MamlTask):
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')
         self.device = device
         self._num_episodes = num_episodes
+        self.sigma = sigma
+        self.sigma_scheduling = sigma_scheduling
         self.START_SIGMA = 30
         self.END_SIGMA = 1
-        self.sigma_scheduling = sigma_scheduling
 
     def sample(self, mode, current_ep: int = -1) -> tuple[torch.Tensor, torch.Tensor]:
         # NOTE for supervised version, the mode does not play a role
@@ -76,7 +77,7 @@ class RowfollowTask(MamlTask):
                 * (current_ep / (0.9 * self._num_episodes))
             sig = self.END_SIGMA if sig < self.END_SIGMA else sig
         else:
-            sig = 10
+            sig = self.sigma
         samples = self.labels.sample(self.k, random_state=self.seed)
         x = []
         y = []
