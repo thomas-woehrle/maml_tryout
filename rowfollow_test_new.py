@@ -1,7 +1,9 @@
 import argparse
 import ast
+import csv
 import os
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -10,6 +12,18 @@ from models import RowfollowModel
 from rowfollow_utils import pre_process_image
 from shared_utils import get_indices_from_pred, get_coordinates_on_frame
 from tasks import RowfollowTask
+
+
+def write_to_csv(file_path, content: dict):
+    with open(file_path, 'a') as csv_file:
+        fieldnames = content.keys()
+
+        csv_writer = csv.DictWriter(csv_file, fieldnames)
+
+        if csv_file.tell() == 0:
+            csv_writer.writeheader()
+
+        csv_writer.writerow(content)  # this assumes that header fields match
 
 
 def print_loss_info(losses: list, title):
@@ -22,27 +36,31 @@ def print_loss_info(losses: list, title):
 def get_data(base_path, df, device):
     x = []
     y = []
+    imgs = []
 
     for idx, row in df.iterrows():
         image_path = os.path.join(
             base_path, row.cam_side, row.image_name)
-        pre_processed_image, _ = pre_process_image(image_path)
+        pre_processed_image, img = pre_process_image(image_path)
         pre_processed_image = torch.from_numpy(pre_processed_image)
         x.append(pre_processed_image)
         vp, ll, lr = ast.literal_eval(row.vp), ast.literal_eval(
             row.ll), ast.literal_eval(row.lr)
         y.append(torch.tensor([vp, ll, lr]))
+        imgs.append(img)
 
     x = torch.stack(x).to(device)
     y = torch.stack(y).to(device)
+    imgs = np.array(imgs)
 
-    return x, y
+    return x, y, imgs
 
 
 def calc_loss(ckpt_path, bag_path, device, seed, no_finetuning, k, inner_gradient_steps, alpha):
     ckpt = torch.load(ckpt_path, map_location=device)
     model = RowfollowModel()
-    model.load_state_dict(ckpt['model_state_dict'])
+    state_dict = ckpt.get('model_state_dict', ckpt.get('state_dict'))
+    model.load_state_dict(state_dict)
     model.to(device)
 
     anil = ckpt.get('anil', False)
@@ -52,7 +70,7 @@ def calc_loss(ckpt_path, bag_path, device, seed, no_finetuning, k, inner_gradien
         params, buffers = model.get_initial_state()
         if sigma_scheduling:
             num_episodes = ckpt.get('num_episodes', 60_000)
-            current_ep = num_episodes - 1  # NOTE ??
+            current_ep = num_episodes - 1  # NOTE maybe change this??
             task = RowfollowTask(
                 bag_path, k, device=device, sigma_scheduling=sigma_scheduling, num_episodes=num_episodes, seed=seed)
             params = inner_loop_update_for_testing(anil, current_ep,
@@ -68,7 +86,7 @@ def calc_loss(ckpt_path, bag_path, device, seed, no_finetuning, k, inner_gradien
     labels = task.labels
     loss_fct = nn.L1Loss(reduction='none')
 
-    x, y = get_data(bag_path, labels, device)
+    x, y, _ = get_data(bag_path, labels, device)
 
     x_hat = get_indices_from_pred(
         model(x)) * 4
@@ -93,7 +111,7 @@ def calc_loss(ckpt_path, bag_path, device, seed, no_finetuning, k, inner_gradien
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('ckpt_path', metavar='', type=str,
+    parser.add_argument('ckpt_path', type=str,
                         help='Path to the trained model parameters')
     parser.add_argument('bag_path')
     parser.add_argument('--n_runs', default=10, type=int)
@@ -114,7 +132,7 @@ if __name__ == '__main__':
                                                                        bag_path=args.bag_path,
                                                                        device=torch.device(
                                                                            'cpu'),
-                                                                       # maybe device make this variable
+                                                                       # maybe make device variable
                                                                        seed=args.seed+i,
                                                                        no_finetuning=args.no_finetuning,
                                                                        k=args.k,
@@ -129,12 +147,21 @@ if __name__ == '__main__':
     losses_on_frame = torch.cat(losses_on_frame)
     mean_losses = torch.stack(mean_losses)
     mean_losses_on_frame = torch.stack(mean_losses_on_frame)
-    print(losses.shape)
-    print(losses_on_frame.shape)
-    print(mean_losses.shape)
-    print(mean_losses_on_frame.shape)
-    print_loss_info(losses, 'Keypoints - raw - across runs')
-    print_loss_info(losses_on_frame, 'Keypoints - on frame - across runs')
-    print_loss_info(mean_losses, 'Keypoints - raw - between runs')
-    print_loss_info(mean_losses_on_frame,
-                    'Keypoints - on frame - between runs')
+
+    results = {
+        **vars(args),
+        'kp_raw_across_mean': torch.mean(losses, dim=0),
+        'kp_raw_across_var': torch.var(losses, dim=0),
+        'kp_raw_across_stddev': torch.sqrt(torch.var(losses, dim=0)),
+        'kp_on_frame_across_mean': torch.mean(losses_on_frame, dim=0),
+        'kp_onframe_across_var': torch.var(losses_on_frame, dim=0),
+        'kp_onframe_across_stddev': torch.sqrt(torch.var(losses_on_frame, dim=0)),
+        'kp_raw_between_mean': torch.mean(mean_losses, dim=0),
+        'kp_raw_between_var': torch.var(mean_losses, dim=0),
+        'kp_raw_between_stddev': torch.sqrt(torch.var(mean_losses, dim=0)),
+        'kp_onframe_between_mean': torch.mean(mean_losses_on_frame, dim=0),
+        'kp_onframe_between_var': torch.var(mean_losses_on_frame, dim=0),
+        'kp_onframe_between_stddev': torch.sqrt(torch.var(mean_losses_on_frame, dim=0))
+    }
+
+    write_to_csv('results.csv', results)
