@@ -10,6 +10,7 @@ import pandas as pd
 from maml import inner_loop_update_for_testing
 from models import RowfollowModel
 from rowfollow_utils import pre_process_image
+from rowfollow_test_new import write_to_csv
 from rowfollow_test_utils.utils import plot_multiple_color_maps, PlotInfo
 from rowfollow_test_utils.keypoint_utils import img_with_lines, Line
 from shared_utils import get_indices_from_pred, get_coordinates_on_frame
@@ -58,13 +59,16 @@ def get_data(base_path, df, device):
     return x, y, imgs
 
 
-def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_steps, alpha):
+def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_steps, alpha, sigma):
     if stage == 'early':
         finetune_data_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/ts_2022_06_03_02h54m54s'
         eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20220603_cornfield-10handpicked/ts_2022_06_03_02h54m54s'
-    if stage == 'late':
+    elif stage == 'late':
         finetune_data_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20221006_cornfield/ts_2022_10_06_10h29m23s_two_random'
         eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20221006_cornfield-10handpicked/ts_2022_10_06_10h29m23s_two_random'
+    elif stage == 'middle':
+        finetune_data_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220714_cornfield/ts_2022_07_14_12h17m57s_two_random/'
+        eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20220714_cornfield-10handpicked/ts_2022_07_14_12h17m57s_two_random/'
 
     ckpt = torch.load(ckpt_path, map_location=device)
     model = RowfollowModel()
@@ -81,7 +85,7 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
             num_episodes = ckpt.get('num_episodes', 60_000)
             current_ep = num_episodes - 1  # NOTE maybe change this??
             task = RowfollowTask(
-                finetune_data_path, k, device=device, sigma_scheduling=sigma_scheduling, num_episodes=num_episodes, seed=seed)
+                finetune_data_path, k, device=device, sigma_scheduling=sigma_scheduling, num_episodes=num_episodes, seed=seed, sigma=sigma)
             params = inner_loop_update_for_testing(anil, current_ep,
                                                    model, params, buffers, task, alpha, inner_gradient_steps)
         else:
@@ -133,7 +137,10 @@ if __name__ == '__main__':
     parser.add_argument('--k', default=5, type=int)
     parser.add_argument('--inner_gradient_steps', default=1, type=int)
     parser.add_argument('--alpha', default=0.4, type=float)
+    parser.add_argument('--sigma', default=10, type=int)
     parser.add_argument('--no_finetuning', default=False, type=bool)
+    parser.add_argument(
+        '--results_file', default='results/quick_results.csv', type=str)
     args = parser.parse_args()
 
     losses = []  # n_runsxNx3
@@ -152,7 +159,8 @@ if __name__ == '__main__':
                                                                              no_finetuning=args.no_finetuning,
                                                                              k=args.k,
                                                                              inner_gradient_steps=args.inner_gradient_steps,
-                                                                             alpha=args.alpha)
+                                                                             alpha=args.alpha,
+                                                                             sigma=args.sigma)
         losses.append(loss)
         losses_on_frame.append(loss_on_frame)
         mean_losses.append(mean_loss)
@@ -174,11 +182,26 @@ if __name__ == '__main__':
     print('kp_onframe_between_stddev:', kp_onframe_between_stddev)
     print('------------------------------')
     print('SIMPLIFIED (take with a grain of salt):')
-    print('Prediction performance:', math.floor(
-        100-kp_onframe_across_mean.sum().item()))
-    print('Prediction stability:', math.floor(
-        100-kp_onframe_across_stddev.sum().item()))
-    print('Fine-tune stability:', math.floor(100 -
-          kp_onframe_between_stddev.sum().item()))
+    prediction_performance = math.floor(
+        100-kp_onframe_across_mean.sum().item())
+    prediction_stability = math.floor(
+        100-kp_onframe_across_stddev.sum().item())
+    fine_tune_stability = math.floor(
+        100-kp_onframe_between_stddev.sum().item())
+    print('Prediction performance:', prediction_performance)
+    print('Prediction stability:', prediction_stability)
+    print('Fine-tune stability:', fine_tune_stability)
+
+    content = {
+        'kp_onframe_across_mean': kp_onframe_across_mean,
+        'kp_onframe_across_stddev': kp_onframe_across_stddev,
+        'kp_onframe_between_stddev': kp_onframe_between_stddev,
+        'prediction_performance': prediction_performance,
+        'prediction_stability': prediction_stability,
+        'fine_tune_stability': fine_tune_stability,
+        **vars(args)
+    }
+
+    write_to_csv(args.results_file, content)
 
     plot_multiple_color_maps(*all_imgs)

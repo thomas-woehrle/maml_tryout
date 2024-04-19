@@ -106,7 +106,9 @@ def get_coordinates_on_frame(vp, kp, dim=(319, 223)):
     line2 = ((0, dim[1]), (dim[0], dim[1]))
     intersect = find_intersection(line1, line2)
     if intersect == None:
-        return kp
+        if torch.is_tensor(kp):
+            kp = kp[0].item(), kp[1].item()
+        return tuple(kp)
 
     if intersect[0] > dim[0] or intersect[0] < 0:
         x = dim[0] if intersect[0] > dim[0] else 0
@@ -114,6 +116,8 @@ def get_coordinates_on_frame(vp, kp, dim=(319, 223)):
         intersect = find_intersection(line1, line2)
 
     if intersect == None:
+        if torch.is_tensor(kp):
+            kp = kp[0].item(), kp[1].item()
         return kp
 
     return intersect

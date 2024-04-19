@@ -41,16 +41,17 @@ def main():
     # bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220714_cornfield/ts_2022_07_14_12h17m57s_two_random/'
     bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/ts_2022_06_03_02h54m54s/'
     # bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20221006_cornfield/ts_2022_10_06_10h06m49s_two_random/'
-    k = 10
+    k = 1
     inner_gradient_steps = 1
     anil = False
     num_episodes = 60000  # shouldnt matter w/o sigma scheduling if task set up correctly
     current_ep = 45000  # same here
 
-    task = RowfollowTask(bag_path, k, num_episodes, device)
+    task = RowfollowTask(bag_path, k, device,
+                         num_episodes=num_episodes, sigma=5)
     params, buffers = model.get_initial_state()
-    params = inner_loop_update_for_testing(anil, current_ep,
-                                           model, params, buffers, task, 0.4, inner_gradient_steps)
+    params = inner_loop_update_for_testing(anil,
+                                           model, params, buffers, task, 0.4, inner_gradient_steps, current_ep=current_ep)
     model.load_state_dict(params | buffers)
     # model.eval() # NOTE why not needed/working?
 

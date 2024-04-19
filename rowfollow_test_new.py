@@ -164,4 +164,4 @@ if __name__ == '__main__':
         'kp_onframe_between_stddev': torch.sqrt(torch.var(mean_losses_on_frame, dim=0))
     }
 
-    write_to_csv('results.csv', results)
+    write_to_csv('results/results.csv', results)
