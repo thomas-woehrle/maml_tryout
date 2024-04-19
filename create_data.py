@@ -47,7 +47,6 @@ def main(data_dir_path, output_path, first_k_days, last_k_days, n, seed):
         image_path = os.path.join(
             data_dir_path, sample.day, sample.bag, sample.camera, sample.image_name)
         pre_processed_image, _ = pre_process_image(image_path)
-        pre_processed_image = torch.from_numpy(pre_processed_image)
         x.append(pre_processed_image)
         vp, ll, lr = ast.literal_eval(sample.vp), ast.literal_eval(
             sample.ll), ast.literal_eval(sample.lr)

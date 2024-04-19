@@ -46,7 +46,6 @@ def get_data(base_path, df, device):
         image_path = os.path.join(
             base_path, row.cam_side, row.image_name)
         pre_processed_image, img = pre_process_image(image_path)
-        pre_processed_image = torch.from_numpy(pre_processed_image)
         x.append(pre_processed_image)
         vp, ll, lr = ast.literal_eval(row.vp), ast.literal_eval(
             row.ll), ast.literal_eval(row.lr)

@@ -88,8 +88,6 @@ class RowfollowTask(MamlTask):
             vp, ll, lr = ast.literal_eval(sample.vp), ast.literal_eval(
                 sample.ll), ast.literal_eval(sample.lr)
             pre_processed_image, _ = pre_process_image(image_path)
-            pre_processed_image = torch.from_numpy(
-                pre_processed_image)
             x.append(pre_processed_image)
             # this can be passed as is to the model as input x
             vp_gt = gaussian_heatmap(vp, sig=sig)
