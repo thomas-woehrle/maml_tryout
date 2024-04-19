@@ -82,12 +82,19 @@ class RowfollowTask(MamlTask):
         x = []
         y = []
 
+        # if set here, blur and prob are the same across the task
+        # do_blur_prob = random.choice([1, 0])
+        # do_jitter_prob = random.choice([1, 0])
         for idx, sample in samples.iterrows():
+            # if set here, blur and prob are not the same across the task
+            do_blur_prob = random.choice([1, 0])
+            do_jitter_prob = random.choice([1, 0])
             image_path = os.path.join(
                 self.bag_path, sample.cam_side, sample.image_name)
             vp, ll, lr = ast.literal_eval(sample.vp), ast.literal_eval(
                 sample.ll), ast.literal_eval(sample.lr)
-            pre_processed_image, _ = pre_process_image(image_path)
+            pre_processed_image, _ = pre_process_image(
+                image_path, do_blur_prob=do_blur_prob, do_jitter_prob=do_jitter_prob)
             x.append(pre_processed_image)
             # this can be passed as is to the model as input x
             vp_gt = gaussian_heatmap(vp, sig=sig)

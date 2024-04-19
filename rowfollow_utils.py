@@ -7,18 +7,20 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms
 
 
-def get_transform(do_blur_prob):
+def get_transform(do_blur_prob, do_jitter_prob):
     transforms_list = []
 
     transforms_list.append(transforms.RandomApply(
         [transforms.GaussianBlur(kernel_size=(13, 13), sigma=(1, 2))], do_blur_prob))
+    transforms_list.append(transforms.RandomApply(
+        [transforms.ColorJitter(0.5, 0.25, 0.25, 0.1)], do_jitter_prob))
     transforms_list.append(transforms.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
 
     return transforms.Compose(transforms_list)
 
 
-def pre_process_image(path_to_image, do_blur_prob=0):
+def pre_process_image(path_to_image, do_blur_prob=0, do_jitter_prob=0):
     # Image is loaded in BGR format as np array
     image = cv2.imread(path_to_image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert to RGB
@@ -29,7 +31,7 @@ def pre_process_image(path_to_image, do_blur_prob=0):
 
     data = transforms.ToTensor()(image)  # also divides by 255
 
-    transform = get_transform(do_blur_prob)
+    transform = get_transform(do_blur_prob, do_jitter_prob)
     data = transform(data)
 
     return data, image
