@@ -6,7 +6,7 @@ import torch.optim as optim
 import random
 from models import OmniglotModel
 from tasks import OmniglotTask
-from anil_maml import inner_loop_update
+from maml import inner_loop_update
 
 parser = argparse.ArgumentParser()
 parser.add_argument('ckpt_path')

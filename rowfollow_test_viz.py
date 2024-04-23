@@ -6,7 +6,7 @@ import rowfollow_test_utils.keypoint_utils as kpu
 from rowfollow_test_utils.utils import process_image, get_filenames, plot_multiple_color_maps, PlotInfo
 from models import RowfollowModel
 from tasks import RowfollowTask
-from maml import inner_loop_update
+from maml import inner_loop_update_for_testing
 
 
 def main():
@@ -21,7 +21,7 @@ def main():
 
     device = torch.device("cpu")  # NOTE change to cuda if available
     ckpt = torch.load(args.ckpt_path, map_location=device)
-    train_bags = ckpt['train_bags']
+    # train_bags = ckpt['train_bags']
     # image_files = ckpt['test_bags']
 
     model = RowfollowModel()
@@ -35,29 +35,29 @@ def main():
     ll_hm_array = []
     vp_hm_array = []
 
+    # NOTE HYPERPARAMETERS NOTE
     # bag_path = random.choice(train_bags).replace(
-    #    '/home/woehrle2/Documents/data', '/Users/tomwoehrle/Documents/research_assistance')
+    #     '/home/woehrle2/Documents/data', '/Users/tomwoehrle/Documents/research_assistance')
     # bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220714_cornfield/ts_2022_07_14_12h17m57s_two_random/'
-    # bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/ts_2022_06_03_02h54m54s/'
+    bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/ts_2022_06_03_02h54m54s/'
     # bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20221006_cornfield/ts_2022_10_06_10h06m49s_two_random/'
-    bag_path = ...
-    print(bag_path)
     k = 10
-    task = RowfollowTask(bag_path, k, device)
+    inner_gradient_steps = 1
+    anil = False
+    num_episodes = 60000  # shouldnt matter w/o sigma scheduling if task set up correctly
+    current_ep = 45000  # same here
+
+    task = RowfollowTask(bag_path, k, num_episodes, device)
     params, buffers = model.get_initial_state()
-    inner_gradient_steps = 2
-    for i in range(inner_gradient_steps):
-        # NOTE has to be done like this, while inner_loop_update is fixed at 1 gradient step
-        # not exactly how maml testing works, cause every time new sample i.e. k = k * inner_gradient_steps
-        params = inner_loop_update(
-            model, params, buffers, task, 0.4, 'doesnt matter')
+    params = inner_loop_update_for_testing(anil, current_ep,
+                                           model, params, buffers, task, 0.4, inner_gradient_steps)
     model.load_state_dict(params | buffers)
     # model.eval() # NOTE why not needed/working?
 
-    n_tests = 40
+    n_tests = 30
     for i in range(n_tests):
         # cam = random.choice(['left_cam', 'right_cam'])
-        cam = 'left_cam'
+        cam = 'right_cam'
         # image_name = random.choice(get_filenames(os.path.join(bag_path, cam)))
         image_name = sorted(get_filenames(os.path.join(bag_path, cam)))[i]
         full_path = os.path.join(bag_path, cam, image_name)
@@ -85,8 +85,8 @@ def main():
     lr_hm_plotinfo_array = [PlotInfo(
         hm, isImage=False, gradientColor="blue", vmin=0, vmax=1) for hm in lr_hm_array]
 
-    title = f'k={
-        k}, steps*={inner_gradient_steps}, no model.eval()'
+    title = f'ckpt: {args.ckpt_path} \n bag: {bag_path} \n k={
+        k}, steps={inner_gradient_steps}, no model.eval()'
     plot_multiple_color_maps(
         img_plotinfo_array, vp_hm_plotinfo_array, ll_hm_plotinfo_array, lr_hm_plotinfo_array, full_title=title)
 

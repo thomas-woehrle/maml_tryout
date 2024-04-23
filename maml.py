@@ -9,6 +9,28 @@ def std_log(episode, loss):
         print(f'{episode}: {loss}')
 
 
+def inner_loop_update_for_testing(anil, model: MamlModel, params, buffers, task: MamlTask, alpha, inner_gradient_steps, current_ep=-1):
+    x_support, y_support = task.sample('support', current_ep)
+    params_i = {n: p for n, p in params.items()}
+    for i in range(inner_gradient_steps):
+        x_hat = model.func_forward(x_support, params_i, buffers)
+        train_loss = task.calc_loss(x_hat, y_support, 'support')
+        if anil:
+            head = {n: p for n, p in params_i.items() if n.startswith('head')
+                    }  # NOTE assumes that head is assigned via self.head = ...
+            head_grads = grad(train_loss, head.values(), create_graph=False)
+            # create_graph=True should enable second order, also leads to slower execution
+            head_i = {n: p - alpha *
+                      g for (n, p), g in zip(head.items(), head_grads)}
+            params_i = {**params_i, **head_i}
+        else:
+            grads = grad(train_loss, params_i.values(), create_graph=False)
+            # create_graph=True should enable second order, also leads to slower execution
+            params_i = {n: p - alpha *
+                        g for (n, p), g in zip(params_i.items(), grads)}
+    return params_i
+
+
 def inner_loop_update(anil, current_ep, model: MamlModel, params, buffers, task: MamlTask, alpha, inner_gradient_steps):
     inner_gradient_steps = 1  # NOTE assumption for now
     x_support, y_support = task.sample('support', current_ep)
@@ -59,3 +81,5 @@ def maml_learn(anil, num_episodes: int, meta_batch_size: int, inner_gradient_ste
 # TODO meaningful typing
 # TODO meaningful inheritance
 # TODO I should think about also passing a MetaOptimizer
+# TODO create uniform config parameters type across train and test
+# TODO for rowfollow rename boolean variables

@@ -83,3 +83,58 @@ def get_ckpt_dir(base_dir, anil, run_name):
     os.makedirs(ckpt_dir, exist_ok=True)
 
     return ckpt_dir
+
+
+def get_indices_from_pred(pred):
+    """
+    pred will have shape (batch_sizex3x56x80)  
+    """
+    batch_size = pred.shape[0]
+    flattened_indices = torch.argmax(pred.view(batch_size, 3, -1), dim=2)
+
+    height = 56
+    width = 80
+    y_coords = flattened_indices // width
+    x_coords = flattened_indices % width
+
+    indices = torch.stack((x_coords, y_coords), dim=2)
+    return indices
+
+
+def get_coordinates_on_frame(vp, kp, dim=(319, 223)):
+    line1 = (vp, kp)
+    line2 = ((0, dim[1]), (dim[0], dim[1]))
+    intersect = find_intersection(line1, line2)
+    if intersect == None:
+        return kp
+
+    if intersect[0] > dim[0] or intersect[0] < 0:
+        x = dim[0] if intersect[0] > dim[0] else 0
+        line2 = ((x, 0), (x, dim[1]))
+        intersect = find_intersection(line1, line2)
+
+    if intersect == None:
+        return kp
+
+    return intersect
+
+
+def find_intersection(line1, line2):
+
+    x1, y1 = line1[0]
+    x2, y2 = line1[1]
+    x3, y3 = line2[0]
+    x4, y4 = line2[1]
+
+    denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+
+    if denominator == 0:
+        # Lines are parallel, no intersection point
+        return None
+
+    intersection_x = ((x1 * y2 - y1 * x2) * (x3 - x4) -
+                      (x1 - x2) * (x3 * y4 - y3 * x4)) / denominator
+    intersection_y = ((x1 * y2 - y1 * x2) * (y3 - y4) -
+                      (y1 - y2) * (x3 * y4 - y3 * x4)) / denominator
+
+    return (int(intersection_x), int(intersection_y))
