@@ -44,14 +44,11 @@ def main():
     k = 1
     inner_gradient_steps = 1
     anil = False
-    num_episodes = 60000  # shouldnt matter w/o sigma scheduling if task set up correctly
-    current_ep = 45000  # same here
 
-    task = RowfollowTask(bag_path, k, device,
-                         num_episodes=num_episodes, sigma=5)
+    task = RowfollowTask(bag_path, k, device, sigma=5)
     params, buffers = model.get_initial_state()
     params = inner_loop_update_for_testing(anil,
-                                           model, params, buffers, task, 0.4, inner_gradient_steps, current_ep=current_ep)
+                                           model, params, buffers, task, 0.4, inner_gradient_steps)
     model.load_state_dict(params | buffers)
     # model.eval() # NOTE why not needed/working?
 

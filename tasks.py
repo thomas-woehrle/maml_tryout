@@ -46,9 +46,7 @@ class OmniglotTask(MamlTask):
 
 
 class RowfollowTask(MamlTask):
-    def __init__(self, bag_path: str, k: int, device: torch.device, sigma: int = 10, sigma_scheduling: bool = False, num_episodes: int = -1, seed: int | None = None):
-        # NOTE in self-supervised version, the image names should be a property as well
-        # TODO make sigma_scheduling yes/no a parameter
+    def __init__(self, bag_path: str, k: int, device: torch.device, sigma: int = 10, seed=None):
         self.bag_path = bag_path
         self.k = k
         df_left = pd.read_csv(
@@ -60,24 +58,11 @@ class RowfollowTask(MamlTask):
         self.seed = seed
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')
         self.device = device
-        self._num_episodes = num_episodes
         self.sigma = sigma
-        self.sigma_scheduling = sigma_scheduling
-        self.START_SIGMA = 30
-        self.END_SIGMA = 1
 
-    def sample(self, mode, current_ep: int = -1) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, mode, current_ep) -> tuple[torch.Tensor, torch.Tensor]:
         # NOTE for supervised version, the mode does not play a role
-        """
-        current_ep : only neede if self.sigma_scheduling is True
-        """
-        if self.sigma_scheduling:
-            sig = self.START_SIGMA \
-                - (self.START_SIGMA - self.END_SIGMA) \
-                * (current_ep / (0.9 * self._num_episodes))
-            sig = self.END_SIGMA if sig < self.END_SIGMA else sig
-        else:
-            sig = self.sigma
+        # current_ep is also not needed
         samples = self.labels.sample(self.k, random_state=self.seed)
         x = []
         y = []
@@ -92,9 +77,9 @@ class RowfollowTask(MamlTask):
                 pre_processed_image)
             x.append(pre_processed_image)
             # this can be passed as is to the model as input x
-            vp_gt = gaussian_heatmap(vp, sig=sig)
-            ll_gt = gaussian_heatmap(ll, sig=sig)
-            lr_gt = gaussian_heatmap(lr, sig=sig)
+            vp_gt = gaussian_heatmap(vp, sig=self.sigma)
+            ll_gt = gaussian_heatmap(ll, sig=self.sigma)
+            lr_gt = gaussian_heatmap(lr, sig=self.sigma)
             y.append(torch.stack([vp_gt, ll_gt, lr_gt]))
 
         x = torch.stack(x)

@@ -1,3 +1,4 @@
+import csv
 import math
 import cv2
 import torch.nn as nn
@@ -10,11 +11,22 @@ import pandas as pd
 from maml import inner_loop_update_for_testing
 from models import RowfollowModel
 from rowfollow_utils import pre_process_image
-from rowfollow_test_new import write_to_csv
 from rowfollow_test_utils.utils import plot_multiple_color_maps, PlotInfo
 from rowfollow_test_utils.keypoint_utils import img_with_lines, Line
 from shared_utils import get_indices_from_pred, get_coordinates_on_frame
 from tasks import RowfollowTask
+
+
+def write_to_csv(file_path, content: dict):
+    with open(file_path, 'a') as csv_file:
+        fieldnames = content.keys()
+
+        csv_writer = csv.DictWriter(csv_file, fieldnames)
+
+        if csv_file.tell() == 0:
+            csv_writer.writeheader()
+
+        csv_writer.writerow(content)  # this assumes that header fields match
 
 
 def get_eval_data(base_path):
@@ -77,21 +89,13 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
     model.to(device)
 
     anil = ckpt.get('anil', False)
-    sigma_scheduling = ckpt.get('sigma_scheduling', False)
 
     if not no_finetuning:
         params, buffers = model.get_initial_state()
-        if sigma_scheduling:
-            num_episodes = ckpt.get('num_episodes', 60_000)
-            current_ep = num_episodes - 1  # NOTE maybe change this??
-            task = RowfollowTask(
-                finetune_data_path, k, device=device, sigma_scheduling=sigma_scheduling, num_episodes=num_episodes, seed=seed, sigma=sigma)
-            params = inner_loop_update_for_testing(anil, current_ep,
-                                                   model, params, buffers, task, alpha, inner_gradient_steps)
-        else:
-            task = RowfollowTask(finetune_data_path, k, device, seed=seed)
-            params = inner_loop_update_for_testing(anil,
-                                                   model, params, buffers, task, alpha, inner_gradient_steps)
+        task = RowfollowTask(finetune_data_path, k,
+                             device, seed=seed, sigma=sigma)
+        params = inner_loop_update_for_testing(anil,
+                                               model, params, buffers, task, alpha, inner_gradient_steps)
         model.load_state_dict(params | buffers)
 
     # model.eval() # NOTE why not needed/working?
