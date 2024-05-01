@@ -1,4 +1,5 @@
 import torch
+import torch.optim as optim
 from torch.autograd import grad
 from interfaces import MamlModel, MamlTask
 from typing import Callable
@@ -55,10 +56,13 @@ def inner_loop_update(anil, current_ep, model: MamlModel, params, buffers, task:
 def maml_learn(anil, num_episodes: int, meta_batch_size: int, inner_gradient_steps: int, alpha: float, beta: float,
                sample_task: Callable[[], MamlTask], model: MamlModel, checkpoint_fct,
                episode_logger: Callable[[int, int], any] = std_log):
-    params, buffers = model.get_initial_state()
+    optimizer = optim.Adam(model.parameters(), lr=beta)
+
+    _, buffers = model.get_initial_state()
 
     for episode in range(num_episodes):
-        acc_meta_update = {n: torch.zeros_like(p) for n, p in params.items()}
+        params, _ = model.get_initial_state()
+        # acc_meta_update = {n: torch.zeros_like(p) for n, p in params.items()}
         acc_loss = 0
         for i in range(meta_batch_size):
             task = sample_task()
@@ -67,13 +71,15 @@ def maml_learn(anil, num_episodes: int, meta_batch_size: int, inner_gradient_ste
             x_query, y_query = task.sample('query', episode)
             test_loss = task.calc_loss(
                 model.func_forward(x_query, params_i, buffers), y_query, 'query')
-            acc_loss += test_loss.item()
-            grads = grad(test_loss, params.values())
-            acc_meta_update = {n: current_update +
-                               g for (n, current_update), g in zip(acc_meta_update.items(), grads)}
+            acc_loss += test_loss
+            # grads = grad(test_loss, params.values())
+            # acc_meta_update = {n: current_update +
+            #                   g for (n, current_update), g in zip(acc_meta_update.items(), grads)}
 
-        params = {n: p - beta *
-                  upd for (n, p), (_, upd) in zip(params.items(), acc_meta_update.items())}
+        # params = {n: p - beta *
+        #           upd for (n, p), (_, upd) in zip(params.items(), acc_meta_update.items())}
+        acc_loss.backward()
+        optimizer.step()
         checkpoint_fct(params, buffers, episode, acc_loss)
         episode_logger(episode, acc_loss)
 
