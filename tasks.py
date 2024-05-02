@@ -6,7 +6,7 @@ import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from interfaces import MamlTask
+from maml_api import MamlTask
 from rowfollow_utils import pre_process_image, gaussian_heatmap
 from torchvision import transforms
 
@@ -87,7 +87,7 @@ class RowfollowTask(MamlTask):
 
         return x.to(self.device), y.to(self.device)
 
-    def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor, mode):
+    def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor, mode, current_ep):
         """
         x_hat: Should be passed as logits, as the model outputs it, i.e. no softmax applied
         y: Is expected as distribution. sample() returns it as such atm
