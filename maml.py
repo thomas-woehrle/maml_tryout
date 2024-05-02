@@ -56,11 +56,13 @@ def inner_loop_update(anil, current_ep, model: MamlModel, params, buffers, task:
 def maml_learn(anil, num_episodes: int, meta_batch_size: int, inner_gradient_steps: int, alpha: float, beta: float,
                sample_task: Callable[[], MamlTask], model: MamlModel, checkpoint_fct,
                episode_logger: Callable[[int, int], any] = std_log):
-    optimizer = optim.Adam(model.parameters(), lr=beta)
+    # optim.Adam(model.parameters(), lr=beta)
+    optimizer = optim.SGD(model.parameters(), lr=beta)
 
     _, buffers = model.get_initial_state()
 
     for episode in range(num_episodes):
+        optimizer.zero_grad()
         params, _ = model.get_initial_state()
         # acc_meta_update = {n: torch.zeros_like(p) for n, p in params.items()}
         acc_loss = 0
