@@ -62,6 +62,15 @@ def inner_loop_update(use_anil: bool, current_ep: int, model: MamlModel, params,
 def train(hparams: maml_config.MamlHyperParameters,
           sample_task: Callable[[], MamlTask], model: MamlModel, checkpoint_fct,
           episode_logger: Callable[[int, float], None] = std_log):
+    """Executes the MAML training loop
+
+    Args:
+        hparams: Hyperparameters relevant to MAML. 
+        sample_task: Function used to sample tasks i.e. x and y in the supervised case
+        model: Model to train
+        checkpoint_fct: Checkpoint function called after every episode
+        episode_logger: Logging function called after every episode. Defaults to std_log.
+    """
     params, buffers = model.get_state()
 
     for episode in range(hparams.n_episodes):

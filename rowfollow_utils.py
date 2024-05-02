@@ -45,6 +45,7 @@ def gaussian_heatmap(center, image_size=(80, 56), sig=10, downscale=4):
     xx, yy = np.meshgrid(x_axis, y_axis)
     kernel = np.exp(-0.5 * (np.square(xx) + np.square(yy)) / np.square(sig))
     kernel = torch.from_numpy(kernel)
+    # TODO the softmax should not be applied here
     kernel = F.softmax(kernel.view(-1), dim=0).view_as(kernel)
     return kernel
 
