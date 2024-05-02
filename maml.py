@@ -1,5 +1,5 @@
 import torch
-from torch.autograd import grad
+from torch import autograd
 
 import maml_config
 from maml_api import MamlModel, MamlTask, SampleMode
@@ -22,13 +22,15 @@ def inner_loop_update_for_testing(anil, model: MamlModel, params, buffers, task:
         if anil:
             head = {n: p for n, p in params_i.items() if n.startswith('head')
                     }  # NOTE assumes that head is assigned via self.head = ...
-            head_grads = grad(train_loss, head.values(), create_graph=False)
+            head_grads = autograd.grad(
+                train_loss, head.values(), create_graph=False)
             # create_graph=True should enable second order, also leads to slower execution
             head_i = {n: p - alpha *
                       g for (n, p), g in zip(head.items(), head_grads)}
             params_i = {**params_i, **head_i}
         else:
-            grads = grad(train_loss, params_i.values(), create_graph=False)
+            grads = autograd.grad(
+                train_loss, params_i.values(), create_graph=False)
             # create_graph=True should enable second order, also leads to slower execution
             params_i = {n: p - alpha *
                         g for (n, p), g in zip(params_i.items(), grads)}
@@ -44,21 +46,22 @@ def inner_loop_update(use_anil: bool, current_ep: int, model: MamlModel, params,
     if use_anil:
         head = {n: p for n, p in params.items() if n.startswith('head')
                 }  # NOTE assumes that head is assigned via self.head = ...
-        head_grads = grad(train_loss, head.values(), create_graph=True)
+        head_grads = autograd.grad(
+            train_loss, head.values(), create_graph=True)
         # create_graph=True should enable second order, also leads to slower execution
         head_i = {n: p - alpha *
                   g for (n, p), g in zip(head.items(), head_grads)}
         params_i = {**params, **head_i}
     else:
-        grads = grad(train_loss, params.values(), create_graph=True)
+        grads = autograd.grad(train_loss, params.values(), create_graph=True)
         params_i = {n: p - alpha *
                     g for (n, p), g in zip(params.items(), grads)}
     return params_i
 
 
-def maml_learn(hparams: maml_config.MamlHyperParameters,
-               sample_task: Callable[[], MamlTask], model: MamlModel, checkpoint_fct,
-               episode_logger: Callable[[int, float], None] = std_log):
+def train(hparams: maml_config.MamlHyperParameters,
+          sample_task: Callable[[], MamlTask], model: MamlModel, checkpoint_fct,
+          episode_logger: Callable[[int, float], None] = std_log):
     params, buffers = model.get_state()
 
     for episode in range(hparams.n_episodes):
@@ -77,7 +80,7 @@ def maml_learn(hparams: maml_config.MamlHyperParameters,
             test_loss = task.calc_loss(
                 model.func_forward(x_query, params_i, buffers), y_query, mode, episode)
             acc_loss += test_loss.item()
-            grads = grad(test_loss, params.values())
+            grads = autograd.grad(test_loss, params.values())
             acc_meta_update = {n: current_update +
                                g for (n, current_update), g in zip(acc_meta_update.items(), grads)}
 

@@ -1,20 +1,22 @@
+import argparse
+import ast
 import csv
 import math
-import cv2
-import torch.nn as nn
-import torch
-import ast
-import argparse
 import os
-import pandas as pd
 
-from maml import inner_loop_update_for_testing
-from models import RowfollowModel
-from rowfollow_utils import pre_process_image
+import cv2
+import pandas as pd
+import torch
+import torch.nn as nn
+
+import maml
+import models
+import rowfollow_utils as utils
+# NOTE fix these imports once rf_utils submodule is introduced
 from rowfollow_test_utils.utils import plot_multiple_color_maps, PlotInfo
 from rowfollow_test_utils.keypoint_utils import img_with_lines, Line
-from shared_utils import get_indices_from_pred, get_coordinates_on_frame
-from tasks import RowfollowTask
+import shared_utils
+import tasks
 
 
 def write_to_csv(file_path, content: dict):
@@ -57,7 +59,7 @@ def get_data(base_path, df, device):
     for idx, row in df.iterrows():
         image_path = os.path.join(
             base_path, row.cam_side, row.image_name)
-        pre_processed_image, img = pre_process_image(image_path)
+        pre_processed_image, img = utils.pre_process_image(image_path)
         pre_processed_image = torch.from_numpy(pre_processed_image)
         x.append(pre_processed_image)
         vp, ll, lr = ast.literal_eval(row.vp), ast.literal_eval(
@@ -83,7 +85,7 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
         eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20220714_cornfield-10handpicked/ts_2022_07_14_12h17m57s_two_random/'
 
     ckpt = torch.load(ckpt_path, map_location=device)
-    model = RowfollowModel()
+    model = models.RowfollowModel()
     state_dict = ckpt.get('model_state_dict', ckpt.get('state_dict'))
     model.load_state_dict(state_dict)
     model.to(device)
@@ -92,10 +94,10 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
 
     if not no_finetuning:
         params, buffers = model.get_initial_state()
-        task = RowfollowTask(finetune_data_path, k,
-                             device, seed=seed, sigma=sigma)
-        params = inner_loop_update_for_testing(anil,
-                                               model, params, buffers, task, alpha, inner_gradient_steps)
+        task = tasks.RowfollowTask(finetune_data_path, k,
+                                   device, seed=seed, sigma=sigma)
+        params = maml.inner_loop_update_for_testing(anil,
+                                                    model, params, buffers, task, alpha, inner_gradient_steps)
         model.load_state_dict(params | buffers)
 
     # model.eval() # NOTE why not needed/working?
@@ -105,7 +107,7 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
 
     x, y, imgs = get_data(eval_data_path, labels, device)
 
-    x_hat = get_indices_from_pred(
+    x_hat = shared_utils.get_indices_from_pred(
         model(x)) * 4
 
     x_hat_on_frame = []
@@ -114,8 +116,8 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
         ll = pred[1]
         lr = pred[2]
         vp = vp[0].item(), vp[1].item()
-        ll = get_coordinates_on_frame(vp, ll)
-        lr = get_coordinates_on_frame(vp, lr)
+        ll = shared_utils.get_coordinates_on_frame(vp, ll)
+        lr = shared_utils.get_coordinates_on_frame(vp, lr)
         x_hat_on_frame.append(torch.tensor([vp, ll, lr]))
         imgs[idx] = draw_pred_on_image(imgs[idx], vp, ll, lr)
 

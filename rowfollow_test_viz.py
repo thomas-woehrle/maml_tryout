@@ -1,12 +1,13 @@
 import argparse
 import os
-import random
+
 import torch
+# NOTE fix imports once rf_utils submodule is introduced
 import rowfollow_test_utils.keypoint_utils as kpu
 from rowfollow_test_utils.utils import process_image, get_filenames, plot_multiple_color_maps, PlotInfo
-from models import RowfollowModel
-from tasks import RowfollowTask
-from maml import inner_loop_update_for_testing
+import models
+import tasks
+import maml
 
 
 def main():
@@ -24,7 +25,7 @@ def main():
     # train_bags = ckpt['train_bags']
     # image_files = ckpt['test_bags']
 
-    model = RowfollowModel()
+    model = models.RowfollowModel()
     model.load_state_dict(ckpt['model_state_dict'])
     model.to(device)
 
@@ -45,10 +46,10 @@ def main():
     inner_gradient_steps = 1
     anil = False
 
-    task = RowfollowTask(bag_path, k, device, sigma=5)
+    task = tasks.RowfollowTask(bag_path, k, device, sigma=5)
     params, buffers = model.get_initial_state()
-    params = inner_loop_update_for_testing(anil,
-                                           model, params, buffers, task, 0.4, inner_gradient_steps)
+    params = maml.inner_loop_update_for_testing(anil,
+                                                model, params, buffers, task, 0.4, inner_gradient_steps)
     model.load_state_dict(params | buffers)
     # model.eval() # NOTE why not needed/working?
 

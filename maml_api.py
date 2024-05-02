@@ -1,13 +1,13 @@
-from enum import Enum, auto
+import enum
 from typing import Protocol
 
 import torch
 import torch.nn as nn
 
 
-class SampleMode(Enum):
-    QUERY = auto()
-    SUPPORT = auto()
+class SampleMode(enum.Enum):
+    QUERY = enum.auto()
+    SUPPORT = enum.auto()
     # Maybe add TEST or FINETUNE mode ?
 
 

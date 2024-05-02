@@ -1,7 +1,8 @@
 import cv2
 import glob
-import numpy as np
 import os
+
+import numpy as np
 import torch
 import torch.nn.functional as F
 
