@@ -1,7 +1,7 @@
 import torch
 from torch.autograd import grad
 
-import hparams
+import maml_config
 from interfaces import MamlModel, MamlTask
 from typing import Callable
 
@@ -54,7 +54,7 @@ def inner_loop_update(anil, current_ep, model: MamlModel, params, buffers, task:
     return params_i
 
 
-def maml_learn(hparams: hparams.MamlHyperParameters,
+def maml_learn(hparams: maml_config.MamlHyperParameters,
                sample_task: Callable[[], MamlTask], model: MamlModel, checkpoint_fct,
                episode_logger: Callable[[int, int], any] = std_log):
     params, buffers = model.get_initial_state()

@@ -3,7 +3,7 @@ import os
 import torch
 import argparse
 
-import hparams
+import maml_config
 
 
 def std_checkpoint_fct(current_episode,
@@ -12,8 +12,8 @@ def std_checkpoint_fct(current_episode,
                        buffers,
                        train_data,
                        test_data,
-                       maml_hparams: hparams.MamlHyperParameters,
-                       env_config: hparams.EnvConfig,
+                       maml_hparams: maml_config.MamlHyperParameters,
+                       env_config: maml_config.EnvConfig,
                        other_config: dict):
     if not current_episode % 1000 == 0 and not current_episode == maml_hparams.n_episodes - 1:
         return

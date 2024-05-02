@@ -3,7 +3,7 @@ import random
 import torch
 from typing import Any
 
-import hparams
+import maml_config
 from maml import maml_learn
 from models import RowfollowModel
 from rowfollow_utils import get_train_and_test_bags
@@ -11,7 +11,7 @@ from shared_utils import std_checkpoint_fct, get_base_parser, get_ckpt_dir
 from tasks import RowfollowTask
 
 
-def main(maml_hparams: hparams.MamlHyperParameters, env_config: hparams.EnvConfig, other_config: dict[str, Any]):
+def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig, other_config: dict[str, Any]):
     train_bags, test_bags = get_train_and_test_bags(env_config.data_dir, 4, 5)
 
     def sample_task():
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("config_filepath", type=str)
     config_filepath: str = arg_parser.parse_args().config_filepath
-    maml_hparams, env_config, other_config = hparams.load_configuration(
+    maml_hparams, env_config, other_config = maml_config.load_configuration(
         config_filepath)
 
     main(maml_hparams, env_config, other_config)
