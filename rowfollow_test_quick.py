@@ -8,14 +8,11 @@ import cv2
 import pandas as pd
 import torch
 import torch.nn as nn
+from rf_utils import viz, vision
 
 import maml
 import models
 import rowfollow_utils as utils
-# NOTE fix these imports once rf_utils submodule is introduced
-from rowfollow_test_utils.utils import plot_multiple_color_maps, PlotInfo
-from rowfollow_test_utils.keypoint_utils import img_with_lines, Line
-import shared_utils
 import tasks
 
 
@@ -46,9 +43,9 @@ def draw_pred_on_image(img, vp, ll, lr):
     img = cv2.circle(
         img, vp, 5, (255, 0, 0), -1)
 
-    lines = [Line(vp, ll, (0, 255, 0), 2),
-             Line(vp, lr, (0, 0, 255), 2)]
-    return img_with_lines(img, lines)
+    lines = [viz.Line(vp, ll, (0, 255, 0), 2),
+             viz.Line(vp, lr, (0, 0, 255), 2)]
+    return viz.img_with_lines(img, lines)
 
 
 def get_data(base_path, df, device):
@@ -93,7 +90,7 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
     anil = ckpt.get('anil', False)
 
     if not no_finetuning:
-        params, buffers = model.get_initial_state()
+        params, buffers = model.get_state()
         task = tasks.RowfollowTask(finetune_data_path, k,
                                    device, seed=seed, sigma=sigma)
         params = maml.inner_loop_update_for_testing(anil,
@@ -107,8 +104,8 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
 
     x, y, imgs = get_data(eval_data_path, labels, device)
 
-    x_hat = shared_utils.get_indices_from_pred(
-        model(x)) * 4
+    x_hat = vision.get_keypoints_from_pred(
+        model(x), factor=4)
 
     x_hat_on_frame = []
     for idx, pred in enumerate(x_hat):
@@ -116,8 +113,8 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
         ll = pred[1]
         lr = pred[2]
         vp = vp[0].item(), vp[1].item()
-        ll = shared_utils.get_coordinates_on_frame(vp, ll)
-        lr = shared_utils.get_coordinates_on_frame(vp, lr)
+        ll = vision.get_coordinates_on_frame(vp, ll)
+        lr = vision.get_coordinates_on_frame(vp, lr)
         x_hat_on_frame.append(torch.tensor([vp, ll, lr]))
         imgs[idx] = draw_pred_on_image(imgs[idx], vp, ll, lr)
 
@@ -128,7 +125,7 @@ def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_s
     loss_on_frame = loss_fct(x_hat_on_frame, y)
     loss_on_frame = torch.sum(loss_on_frame, dim=2).float()
 
-    imgs = [PlotInfo(img, isImage=True) for img in imgs]
+    imgs = [viz.PlotInfo(img, isImage=True) for img in imgs]
 
     return loss, loss_on_frame, torch.mean(loss, dim=0), torch.mean(loss_on_frame, 0), imgs
 
@@ -210,4 +207,4 @@ if __name__ == '__main__':
 
     write_to_csv(args.results_file, content)
 
-    plot_multiple_color_maps(*all_imgs)
+    viz.plot_multiple_color_maps(*all_imgs)
