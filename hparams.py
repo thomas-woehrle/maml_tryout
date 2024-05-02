@@ -1,6 +1,8 @@
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
+
+import torch
 
 
 @dataclass
@@ -27,9 +29,28 @@ class MamlHyperParameters():
     beta: float = 0.001
 
 
-def load_configuration(file_path: str) -> tuple[MamlHyperParameters, dict[str, Any]]:
+@dataclass
+class EnvConfig():
+    """
+    Class representing configuration variables needed in almost all cases.
+
+    Attributes:
+        device: A torch.device.
+        ckpt_base: The base of the checkpoint directory.
+        data_dir: The path to the data to be used.
+        run_name: The name of this run.
+    """
+    device: torch.device
+    ckpt_base: str
+    data_dir: str
+    run_name: Optional[str] = None
+
+
+def load_configuration(file_path: str) -> tuple[MamlHyperParameters, EnvConfig, dict[str, Any]]:
     """Turns a .json file into a MamlHyperParameters object and a dictionary. 
-    It expects the following form: 
+
+    It expects the following form (fields that have a default can be omitted): 
+
     {
         "maml_hparams": {
             "use_anil": false,
@@ -40,22 +61,29 @@ def load_configuration(file_path: str) -> tuple[MamlHyperParameters, dict[str, A
             "alpha": 0.4,
             "beta": 0.001
         },
-        "other_hparams": {...}
+        "env_config": {
+            "device": "cpu",
+            "ckpt_base": "checkpoints/rowfollow_maml",
+            "data_dir": "/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new",
+            "run_name": "some_name"
+        },
+        "other_config": {
+            ...
+        }
     }
 
     Args:
         file_path: Filepath to input .json file
 
     Returns:
-        MamlHyperParameters object and dictionary representing the additional hyperparameters
+        MamlHyperParameters object, EnvConfig object and dictionary representing the additional configuration values
     """
     with open(file_path, 'r') as file:
         data = json.load(file)
 
-    # Parse MAML hyperparameters
     maml_hparams = MamlHyperParameters(**data['maml_hparams'])
+    data['env_config']['device'] = torch.device(data['env_config']['device'])
+    env_config = EnvConfig(**data['env_config'])
+    other_config = data.get('other_config', {})
 
-    # Additional parameters can be whatever the user specifies
-    add_hparams = data.get('other_hparams', {})
-
-    return maml_hparams, add_hparams
+    return maml_hparams, env_config, other_config
