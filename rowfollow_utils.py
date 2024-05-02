@@ -28,15 +28,18 @@ def pre_process_image(path_to_image):
     return data, image
 
 
-def gaussian_heatmap(center, image_size=(80, 56), sig=10, downscale=4):
-    # NOTE the sig is kind of like a hyperparameter
+def dist_from_keypoint(center: tuple[int, int], image_size: tuple[int, int] = (80, 56), sig: float = 10, downscale: float = 1):
     # adapted from https://stackoverflow.com/a/58621239
-    """
-    It produces single gaussian at expected center
-    :param center:  the mean position (X, Y) - where high value expected
-    :param image_size: The total image size (width, height)
-    :param sig: The sigma value
-    :return:
+    """Creates a probability distribution from a keypoint, by applying a gaussian, then a softmax.
+
+    Args:
+        center: The keypoint and center of the gaussian.
+        image_size: The image size. Defaults to (80, 56).
+        sig: The sigma used for the gaussian. Defaults to 10.
+        downscale: How the center should be downscaled. Defaults to 1.
+
+    Returns:
+        The distribution in the needed shape.
     """
     x_axis = np.linspace(0, image_size[0]-1,
                          image_size[0]) - center[0] / downscale
@@ -45,7 +48,7 @@ def gaussian_heatmap(center, image_size=(80, 56), sig=10, downscale=4):
     xx, yy = np.meshgrid(x_axis, y_axis)
     kernel = np.exp(-0.5 * (np.square(xx) + np.square(yy)) / np.square(sig))
     kernel = torch.from_numpy(kernel)
-    # TODO the softmax should not be applied here
+    # NOTE probably should split this function into two, but not now
     kernel = F.softmax(kernel.view(-1), dim=0).view_as(kernel)
     return kernel
 

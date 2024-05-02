@@ -88,9 +88,9 @@ class RowfollowTask(maml_api.MamlTask):
             vp, ll, lr = ast.literal_eval(sample.vp), ast.literal_eval(
                 sample.ll), ast.literal_eval(sample.lr)
             # vp, ll, lr are coordinates, but we need distributions
-            vp_gt = utils.gaussian_heatmap(vp, sig=self.sigma)
-            ll_gt = utils.gaussian_heatmap(ll, sig=self.sigma)
-            lr_gt = utils.gaussian_heatmap(lr, sig=self.sigma)
+            vp_gt = utils.dist_from_keypoint(vp, sig=self.sigma, downscale=4)
+            ll_gt = utils.dist_from_keypoint(ll, sig=self.sigma, downscale=4)
+            lr_gt = utils.dist_from_keypoint(lr, sig=self.sigma, downscale=4)
             y.append(torch.stack([vp_gt, ll_gt, lr_gt]))
 
         x = torch.stack(x)
