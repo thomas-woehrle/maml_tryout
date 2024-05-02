@@ -3,6 +3,8 @@ import os
 import torch
 import argparse
 
+import maml_config
+
 
 def std_checkpoint_fct(current_episode,
                        current_loss,
@@ -10,37 +12,28 @@ def std_checkpoint_fct(current_episode,
                        buffers,
                        train_data,
                        test_data,
-                       task_name,
-                       num_episodes,
-                       meta_batch_size,
-                       k,
-                       inner_gradient_steps,
-                       alpha,
-                       beta,
-                       anil,
-                       ckpt_dir, add_info={}):
-    if not current_episode % 1000 == 0 and not current_episode == num_episodes - 1:
+                       maml_hparams: maml_config.MamlHyperParameters,
+                       env_config: maml_config.EnvConfig,
+                       other_config: dict):
+    if not current_episode % 1000 == 0 and not current_episode == maml_hparams.n_episodes - 1:
         return
+    ckpt_dir = get_ckpt_dir(env_config.ckpt_base,
+                            maml_hparams.use_anil, env_config.run_name)
     ckpt_name = os.path.join(
         ckpt_dir, f'ep{current_episode}_loss{current_loss}.pt')
 
     state_dict = params | buffers
     torch.save(
         {
+            'current_date': datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S"),
+            'current_episode': current_episode,
+            'current_loss': current_loss,
             'model_state_dict': state_dict,
             'train_data': train_data,
             'test_data': test_data,
-            'task_name': task_name,
-            'num_episodes': num_episodes,
-            'meta_batch_size': meta_batch_size,
-            'k': k,
-            'inner_gradient_steps': inner_gradient_steps,
-            'alpha': alpha,
-            'beta': beta,
-            'anil': anil,
-            'current_date': datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S"),
-            'current_episode': current_episode,
-            **add_info
+            **vars(maml_hparams),
+            **vars(env_config),
+            **other_config
         }, ckpt_name
     )
 
