@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from maml_api import MamlTask
 from rowfollow_utils import pre_process_image, gaussian_heatmap
 from torchvision import transforms
+from maml_api import SampleMode
 
 TRANSFORM = transforms.Compose([
     transforms.ToTensor(),  # also changes to C x H x W
@@ -25,7 +26,7 @@ class OmniglotTask(MamlTask):
         self._loss_fct = nn.CrossEntropyLoss(
             reduction='sum')  # NOTE reduction=... ?
 
-    def sample(self, mode):
+    def sample(self, mode: SampleMode, current_ep: int):
         x = []  # will be transformed to a tensor later
         y = []  # same here
         for i, char in enumerate(self.chars):
@@ -41,8 +42,8 @@ class OmniglotTask(MamlTask):
 
         return x.to(self.device), y.to(self.device)
 
-    def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor, mode):
-        return self._loss_fct(x_hat, y)
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor, mode: SampleMode, current_ep: int):
+        return self._loss_fct(y_hat, y)
 
 
 class RowfollowTask(MamlTask):
@@ -60,9 +61,7 @@ class RowfollowTask(MamlTask):
         self.device = device
         self.sigma = sigma
 
-    def sample(self, mode, current_ep) -> tuple[torch.Tensor, torch.Tensor]:
-        # NOTE for supervised version, the mode does not play a role
-        # current_ep is also not needed
+    def sample(self, mode: SampleMode, current_ep: int) -> tuple[torch.Tensor, torch.Tensor]:
         samples = self.labels.sample(self.k, random_state=self.seed)
         x = []
         y = []
@@ -87,12 +86,12 @@ class RowfollowTask(MamlTask):
 
         return x.to(self.device), y.to(self.device)
 
-    def calc_loss(self, x_hat: torch.Tensor, y: torch.Tensor, mode, current_ep):
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor, mode: SampleMode, current_ep: int):
         """
         x_hat: Should be passed as logits, as the model outputs it, i.e. no softmax applied
         y: Is expected as distribution. sample() returns it as such atm
         """
         # NOTE for supervised version, the mode does not play a role
-        x_hat = F.log_softmax(x_hat.view(
-            *x_hat.size()[:2], -1), 2).view_as(x_hat)
-        return self._loss_fct(x_hat[:, 0], y[:, 0]) + self._loss_fct(x_hat[:, 1], y[:, 1]) + self._loss_fct(x_hat[:, 2], y[:, 2])
+        y_hat = F.log_softmax(y_hat.view(
+            *y_hat.size()[:2], -1), 2).view_as(y_hat)
+        return self._loss_fct(y_hat[:, 0], y[:, 0]) + self._loss_fct(y_hat[:, 1], y[:, 1]) + self._loss_fct(y_hat[:, 2], y[:, 2])

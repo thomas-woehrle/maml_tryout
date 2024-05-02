@@ -1,13 +1,12 @@
 import argparse
 import random
-import torch
 from typing import Any
 
 import maml_config
 from maml import maml_learn
 from models import RowfollowModel
 from rowfollow_utils import get_train_and_test_bags
-from shared_utils import std_checkpoint_fct, get_base_parser, get_ckpt_dir
+from shared_utils import std_checkpoint_fct
 from tasks import RowfollowTask
 
 

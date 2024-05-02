@@ -37,8 +37,6 @@ def main(n, k, num_episodes, meta_batch_size, inner_gradient_steps, alpha, beta,
     maml_learn(num_episodes, meta_batch_size, inner_gradient_steps,
                alpha, beta, sample_task, omniglotModel, checkpoint_fct)
 
-# TODO double-check if train and test chars are the same in checkpoints
-
 
 if __name__ == '__main__':
     n = 5
