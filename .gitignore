@@ -3,7 +3,6 @@
 /std_venv
 /checkpoints
 /output
-trying.py
 models.py
 **/test_data
 **/results
