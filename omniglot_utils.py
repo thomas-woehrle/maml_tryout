@@ -1,4 +1,5 @@
 import os
+
 import matplotlib.pyplot as plt
 
 background_imgs_path = 'omniglot/images_background'

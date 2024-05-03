@@ -1,11 +1,12 @@
 import argparse
-import torch
-import torch.nn as nn
 import random
-from models2 import OmniglotModel
-from tasks import OmniglotTask
+
+import torch
+
+import maml
+import models
+import tasks
 from torchmetrics import classification
-from maml import inner_loop_update_for_testing
 
 parser = argparse.ArgumentParser()
 parser.add_argument('ckpt_path')
@@ -13,10 +14,10 @@ ckpt_path = parser.parse_args().ckpt_path
 
 ckpt = torch.load(ckpt_path)
 
-meta_model = OmniglotModel(5)
+meta_model = models.OmniglotModel(5)
 test_chars = ckpt.get('test_chars', ckpt.get('test_data', None))
 meta_model.load_state_dict(ckpt['model_state_dict'])
-meta_params, buffers = meta_model.get_initial_state()
+meta_params, buffers = meta_model.get_state()
 
 alpha = 0.4  # NOTE only makes sense to use same as alpha from training, right?
 n_evaluations = 100
@@ -26,16 +27,16 @@ inner_gradient_steps = 3
 accuracy = classification.MulticlassAccuracy(num_classes=5)
 
 for i in range(n_evaluations):
-    task = OmniglotTask(random.sample(test_chars, k=n), k, 'cpu')
+    task = tasks.OmniglotTask(random.sample(test_chars, k=n), k, 'cpu')
 
     params_i = meta_params
-    params_i = inner_loop_update_for_testing(anil=False,
-                                             model=meta_model,
-                                             params=meta_params,
-                                             buffers=buffers,
-                                             task=task,
-                                             alpha=alpha,
-                                             inner_gradient_steps=inner_gradient_steps)
+    params_i = maml.inner_loop_update_for_testing(anil=False,
+                                                  model=meta_model,
+                                                  params=meta_params,
+                                                  buffers=buffers,
+                                                  task=task,
+                                                  alpha=alpha,
+                                                  inner_gradient_steps=inner_gradient_steps)
 
     # meta_model.eval()  # check how this is needed
     # evaluation of capabilities after training

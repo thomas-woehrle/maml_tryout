@@ -1,51 +1,43 @@
+import argparse
 import random
-import torch
-from maml import maml_learn
-from models import RowfollowModel
-from rowfollow_utils import get_train_and_test_bags
-from shared_utils import std_checkpoint_fct, get_base_parser, get_ckpt_dir
-from tasks import RowfollowTask
+from typing import Any
+
+import maml
+import maml_config
+import models
+import rowfollow_utils as utils
+import shared_utils
+import tasks
 
 
-def main(num_episodes: int, meta_batch_size: int, k: int, inner_gradient_steps: int,
-         alpha: float, beta: float, ckpt_dir: str, device: torch.device,
-         data_dir: str, anil: bool, sigma: int):
-    train_bags, test_bags = get_train_and_test_bags(data_dir, 4, 5)
+def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig, other_config: dict[str, Any]):
+    train_bags, test_bags = utils.get_train_and_test_bags(
+        env_config.data_dir, 4, 5)
 
     def sample_task():
-        return RowfollowTask(random.choice(train_bags), k, device, sigma=sigma)
+        return tasks.RowfollowTask(random.choice(train_bags), maml_hparams.k, env_config.device, sigma=other_config['sigma'])
 
-    model = RowfollowModel()
-    model.to(device)
+    model = models.RowfollowModel()
+    model.to(env_config.device)
+
+    ckpt_dir = shared_utils.get_ckpt_dir(env_config.ckpt_base,
+                                         maml_hparams.use_anil, env_config.run_name)
 
     def checkpoint_fct(params, buffers, episode, loss):
-        std_checkpoint_fct(episode, loss, params, buffers, train_bags, test_bags, 'RowfollowTask', num_episodes,
-                           meta_batch_size, k, inner_gradient_steps, alpha, beta, anil, ckpt_dir, add_info={'sigma': sigma})
+        shared_utils.std_checkpoint_fct(ckpt_dir=ckpt_dir,
+                                        current_episode=episode, current_loss=loss,
+                                        params=params, buffers=buffers,
+                                        train_data=train_bags, test_data=test_bags,
+                                        maml_hparams=maml_hparams, env_config=env_config, other_config=other_config)
 
-    maml_learn(anil, num_episodes, meta_batch_size, inner_gradient_steps,
-               alpha, beta, sample_task, model, checkpoint_fct)
+    maml.train(maml_hparams, sample_task, model, checkpoint_fct)
 
 
 if __name__ == '__main__':
-    parser = get_base_parser()
-    parser.add_argument(
-        '--data_dir', type=str, help='The directory where the files in question are stored')
-    parser.add_argument(
-        '--sigma', default=10, type=int, help='The sigma value applied to create a heatmap out of the labels. (Default: 10)')
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("config_filepath", type=str)
+    config_filepath: str = arg_parser.parse_args().config_filepath
+    maml_hparams, env_config, other_config = maml_config.load_configuration(
+        config_filepath)
 
-    args = parser.parse_args()
-
-    ckpt_dir = get_ckpt_dir(args.ckpt_base_dir, args.anil, args.run_name)
-    device = torch.device(args.device)
-
-    main(num_episodes=args.num_episodes,
-         meta_batch_size=args.meta_batch_size,
-         k=args.k,
-         inner_gradient_steps=args.inner_gradient_steps,
-         alpha=args.alpha,
-         beta=args.beta,
-         ckpt_dir=ckpt_dir,
-         device=device,
-         data_dir=args.data_dir,
-         anil=args.anil,
-         sigma=args.sigma)
+    main(maml_hparams, env_config, other_config)
