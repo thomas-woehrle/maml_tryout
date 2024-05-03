@@ -1,0 +1,19 @@
+{
+  "maml_hparams": {
+    "use_anil": false,
+    "n_episodes": 60000,
+    "meta_batch_size": 4,
+    "inner_gradient_steps": 1,
+    "k": 4,
+    "alpha": 0.4,
+    "beta": 0.001
+  },
+  "env_config": {
+    "device": "cpu",
+    "ckpt_base": "checkpoints/rowfollow_maml",
+    "data_dir": "/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new"
+  },
+  "other_config": {
+    "sigma": 10
+  }
+}

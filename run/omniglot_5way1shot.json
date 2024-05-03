@@ -1,0 +1,19 @@
+{
+  "maml_hparams": {
+    "use_anil": false,
+    "n_episodes": 60000,
+    "meta_batch_size": 32,
+    "inner_gradient_steps": 1,
+    "k": 1,
+    "alpha": 0.4,
+    "beta": 0.001
+  },
+  "env_config": {
+    "device": "cpu",
+    "ckpt_base": "checkpoints/omniglot_maml",
+    "data_dir": "/Users/tomwoehrle/Documents/research_assistance/maml_tryout/omniglot"
+  },
+  "other_config": {
+    "n": 5
+  }
+}

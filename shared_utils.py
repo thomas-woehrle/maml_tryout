@@ -7,7 +7,8 @@ import torch
 import maml_config
 
 
-def std_checkpoint_fct(current_episode,
+def std_checkpoint_fct(ckpt_dir,
+                       current_episode,
                        current_loss,
                        params,
                        buffers,
@@ -18,8 +19,7 @@ def std_checkpoint_fct(current_episode,
                        other_config: dict):
     if not current_episode % 1000 == 0 and not current_episode == maml_hparams.n_episodes - 1:
         return
-    ckpt_dir = get_ckpt_dir(env_config.ckpt_base,
-                            maml_hparams.use_anil, env_config.run_name)
+
     ckpt_name = os.path.join(
         ckpt_dir, f'ep{current_episode}_loss{current_loss}.pt')
 

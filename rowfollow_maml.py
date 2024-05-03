@@ -20,9 +20,15 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
     model = models.RowfollowModel()
     model.to(env_config.device)
 
+    ckpt_dir = shared_utils.get_ckpt_dir(env_config.ckpt_base,
+                                         maml_hparams.use_anil, env_config.run_name)
+
     def checkpoint_fct(params, buffers, episode, loss):
-        shared_utils.std_checkpoint_fct(current_episode=episode, current_loss=loss, params=params, buffers=buffers, train_data=train_bags,
-                                        test_data=test_bags, maml_hparams=maml_hparams, env_config=env_config, other_config=other_config)
+        shared_utils.std_checkpoint_fct(ckpt_dir=ckpt_dir,
+                                        current_episode=episode, current_loss=loss,
+                                        params=params, buffers=buffers,
+                                        train_data=train_bags, test_data=test_bags,
+                                        maml_hparams=maml_hparams, env_config=env_config, other_config=other_config)
 
     maml.train(maml_hparams, sample_task, model, checkpoint_fct)
 

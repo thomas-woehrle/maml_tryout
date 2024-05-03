@@ -1,8 +1,11 @@
+import argparse
 import datetime
 import os
 import random
+from typing import Any
 
 import maml
+import maml_config
 import models
 import omniglot_utils as utils
 import shared_utils
@@ -17,37 +20,38 @@ def get_checkpoint_dir():
     return checkpoint_dir
 
 
-def main(n, k, num_episodes, meta_batch_size, inner_gradient_steps, alpha, beta, device='cpu'):
+def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig, other_config: dict[str, Any]):
     omniglot_chars = utils.get_all_chars()
     random.shuffle(omniglot_chars)  # in-place shuffle
     train_chars = omniglot_chars[:1200]
     test_chars = omniglot_chars[1200:]
+    # randomly determine 1200 chars for training, rest for testing
 
     def sample_task():
-        return tasks.OmniglotTask(random.sample(train_chars, k=n), k, device)
+        return tasks.OmniglotTask(random.sample(train_chars, k=other_config['n']), maml_hparams.k, env_config.device)
 
-    omniglotModel = models.OmniglotModel(n)
-    omniglotModel.to(device)
+    omniglotModel = models.OmniglotModel(other_config['n'])
+    omniglotModel.to(env_config.device)
 
-    ckpt_dir = get_checkpoint_dir()
+    ckpt_dir = shared_utils.get_ckpt_dir(env_config.ckpt_base,
+                                         maml_hparams.use_anil, env_config.run_name)
 
     def checkpoint_fct(params, buffers, episode, loss):
-        shared_utils.std_checkpoint_fct(episode, loss, params, buffers, train_chars, test_chars, 'OmniglotTask', num_episodes,
-                                        meta_batch_size, inner_gradient_steps, alpha, beta, k, ckpt_dir, None)
+        shared_utils.std_checkpoint_fct(ckpt_dir=ckpt_dir,
+                                        current_episode=episode, current_loss=loss,
+                                        params=params, buffers=buffers,
+                                        train_data=train_chars, test_data=test_chars,
+                                        maml_hparams=maml_hparams, env_config=env_config, other_config=other_config)
 
-    maml.train(num_episodes, meta_batch_size, inner_gradient_steps,
-               alpha, beta, sample_task, omniglotModel, checkpoint_fct)
+    maml.train(maml_hparams, sample_task, omniglotModel, checkpoint_fct)
 
 
 if __name__ == '__main__':
-    n = 5
-    k = 1
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("config_filepath", type=str)
+    config_filepath: str = arg_parser.parse_args().config_filepath
 
-    num_episodes = 60000
-    meta_batch_size = 32
-    inner_gradient_steps = 1
-    alpha = 0.4
-    beta = 0.001
-    # TODO adjust to new variable structure of maml.py
-    main(n, k, num_episodes, meta_batch_size,
-         inner_gradient_steps, alpha, beta)
+    maml_hparams, env_config, other_config = maml_config.load_configuration(
+        config_filepath)
+
+    main(maml_hparams, env_config, other_config)
