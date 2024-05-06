@@ -78,7 +78,7 @@ def train(hparams: maml_config.MamlHyperParameters,
     for episode in range(hparams.n_episodes):
         optimizer.zero_grad()
         params, _ = model.get_state()
-        acc_loss = 0.0
+        acc_loss = 0.0  # Accumulated loss -> will become tensor
 
         for i in range(hparams.meta_batch_size):
             mode = maml_api.SampleMode.QUERY
@@ -90,7 +90,7 @@ def train(hparams: maml_config.MamlHyperParameters,
             # Meta update
             x_query, y_query = task.sample(mode, episode)
             test_loss = task.calc_loss(
-                model.func_forward(x_query, params_i, buffers), y_query, 'query', episode)
+                model.func_forward(x_query, params_i, buffers), y_query, mode, episode)
             acc_loss += test_loss
 
         acc_loss.backward()
