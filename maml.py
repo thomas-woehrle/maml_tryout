@@ -72,7 +72,7 @@ def train(hparams: maml_config.MamlHyperParameters,
         checkpoint_fct: Checkpoint function called after every episode
         episode_logger: Logging function called after every episode. Defaults to std_log.
     """
-    optimizer = optim.SGD(model.parameters(), lr=hparams.beta)
+    optimizer = optim.Adam(model.parameters(), lr=hparams.beta)
     _, buffers = model.get_state()
 
     for episode in range(hparams.n_episodes):
