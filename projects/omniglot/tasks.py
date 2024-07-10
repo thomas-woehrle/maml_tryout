@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 
 import maml_api
-import rowfollow_utils as utils
+from projects.rowfollow import rowfollow_utils as utils
 
 TRANSFORM = transforms.Compose([
     transforms.ToTensor(),  # also changes to C x H x W

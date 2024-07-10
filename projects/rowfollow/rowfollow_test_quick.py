@@ -11,9 +11,8 @@ import torch.nn as nn
 from rf_utils import viz, vision
 
 import maml
-import models
 import rowfollow_utils as utils
-import tasks
+from projects.omniglot import tasks, models
 
 
 def write_to_csv(file_path, content: dict):
@@ -73,13 +72,13 @@ def get_data(base_path, df, device):
 def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_steps, alpha, sigma):
     if stage == 'early':
         finetune_data_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/ts_2022_06_03_02h54m54s'
-        eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20220603_cornfield-10handpicked/ts_2022_06_03_02h54m54s'
+        eval_data_path = '/test_data/20220603_cornfield-10handpicked/ts_2022_06_03_02h54m54s'
     elif stage == 'late':
         finetune_data_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20221006_cornfield/ts_2022_10_06_10h29m23s_two_random'
-        eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20221006_cornfield-10handpicked/ts_2022_10_06_10h29m23s_two_random'
+        eval_data_path = '/test_data/20221006_cornfield-10handpicked/ts_2022_10_06_10h29m23s_two_random'
     elif stage == 'middle':
         finetune_data_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220714_cornfield/ts_2022_07_14_12h17m57s_two_random/'
-        eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20220714_cornfield-10handpicked/ts_2022_07_14_12h17m57s_two_random/'
+        eval_data_path = '/test_data/20220714_cornfield-10handpicked/ts_2022_07_14_12h17m57s_two_random/'
 
     ckpt = torch.load(ckpt_path, map_location=device)
     model = models.RowfollowModel()

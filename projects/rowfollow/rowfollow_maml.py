@@ -4,10 +4,8 @@ from typing import Any
 
 import maml
 import maml_config
-import models
 import rowfollow_utils as utils
-import shared_utils
-import tasks
+from projects.omniglot import tasks, models, shared_utils
 
 
 def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig, other_config: dict[str, Any]):

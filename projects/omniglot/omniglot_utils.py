@@ -2,8 +2,8 @@ import os
 
 import matplotlib.pyplot as plt
 
-background_imgs_path = 'omniglot/images_background'
-eval_imgs_path = 'omniglot/images_evaluation'
+background_imgs_path = '../../omniglot/images_background'
+eval_imgs_path = '../../omniglot/images_evaluation'
 
 
 def get_chars_from_dir(dir_path):
