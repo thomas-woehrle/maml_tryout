@@ -10,8 +10,8 @@
   },
   "env_config": {
     "device": "cpu",
-    "ckpt_base": "checkpoints/omniglot_maml",
-    "data_dir": "/Users/tomwoehrle/Documents/research_assistance/maml_tryout/omniglot"
+    "ckpt_base": "/Users/tomwoehrle/Documents/research_assistance/maml/checkpoints/omniglot_maml",
+    "data_dir": "/Users/tomwoehrle/Documents/research_assistance/maml/omniglot_data"
   },
   "other_config": {
     "n": 5
