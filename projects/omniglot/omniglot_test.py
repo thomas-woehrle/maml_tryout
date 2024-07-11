@@ -4,8 +4,8 @@ import random
 import torch
 
 import maml
-import models
-import tasks
+import omniglot_model
+import omniglot_task
 from torchmetrics import classification
 
 parser = argparse.ArgumentParser()

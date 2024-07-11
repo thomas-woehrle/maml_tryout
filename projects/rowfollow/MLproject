@@ -5,10 +5,9 @@ name: Omniglot MAML
 # conda_env: my_env.yaml
 # or
 # docker_env:
-#    image:  mlflow-docker-example
+# image:  mlflow-docker-example
 
 entry_points:
   main:
     # adjust PYTHONPATH so that imports work
-    command: "PYTHONPATH=../../ python rowfollow_maml.py run/rf_std.json"
-
+    command: "PYTHONPATH=../../ python rowfollow_maml.py run_configs/rf_std.json"

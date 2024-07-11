@@ -66,7 +66,7 @@ def train(hparams: maml_config.MamlHyperParameters,
     """Executes the MAML training loop
 
     Args:
-        hparams: Hyperparameters relevant to MAML. 
+        hparams: Hyperparameters relevant for MAML.
         sample_task: Function used to sample tasks i.e. x and y in the supervised case
         model: Model to train
         checkpoint_fct: Checkpoint function called after every episode

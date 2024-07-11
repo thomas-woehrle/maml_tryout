@@ -3,6 +3,5 @@
 /std_venv
 /checkpoints
 /output
-projects/omniglot/models.py
 **/test_data
 **/results

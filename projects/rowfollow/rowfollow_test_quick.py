@@ -12,7 +12,7 @@ from rf_utils import viz, vision
 
 import maml
 import rowfollow_utils as utils
-from projects.omniglot import tasks, models
+from projects.omniglot import omniglot_task, omniglot_model
 
 
 def write_to_csv(file_path, content: dict):
@@ -147,7 +147,7 @@ if __name__ == '__main__':
 
     losses = []  # n_runsxNx3
     losses_on_frame = []  # n_runsxNx3
-    mean_losses = []  # n_runsx3, where the Nx3 were reduced to 3 by taking the mean. means per run are stored here
+    mean_losses = []  # n_runsx3, where the Nx3 were reduced to 3 by taking the mean. means per run_configs are stored here
     mean_losses_on_frame = []  # n_runsx3
     all_imgs = []  # n_runsxN
     for i in range(args.n_runs):

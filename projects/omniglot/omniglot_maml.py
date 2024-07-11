@@ -6,10 +6,11 @@ from typing import Any
 
 import maml
 import maml_config
-import models
-import omniglot_utils as utils
-import shared_utils
-import tasks
+import maml_utils
+
+import omniglot_model
+import omniglot_task
+import omniglot_utils
 
 
 def get_checkpoint_dir():
@@ -21,23 +22,23 @@ def get_checkpoint_dir():
 
 
 def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig, other_config: dict[str, Any]):
-    omniglot_chars = utils.get_all_chars()
+    omniglot_chars = omniglot_utils.get_all_chars()
     random.shuffle(omniglot_chars)  # in-place shuffle
     train_chars = omniglot_chars[:1200]
     test_chars = omniglot_chars[1200:]
     # randomly determine 1200 chars for training, rest for testing
 
     def sample_task():
-        return tasks.OmniglotTask(random.sample(train_chars, k=other_config['n']), maml_hparams.k, env_config.device)
+        return omniglot_task.OmniglotTask(random.sample(train_chars, k=other_config['n']), maml_hparams.k, env_config.device)
 
-    omniglotModel = models.OmniglotModel(other_config['n'])
+    omniglotModel = omniglot_model.OmniglotModel(other_config['n'])
     omniglotModel.to(env_config.device)
 
-    ckpt_dir = shared_utils.get_ckpt_dir(env_config.ckpt_base,
+    ckpt_dir = maml_utils.get_ckpt_dir(env_config.ckpt_base,
                                          maml_hparams.use_anil, env_config.run_name)
 
     def checkpoint_fct(params, buffers, episode, loss):
-        shared_utils.std_checkpoint_fct(ckpt_dir=ckpt_dir,
+        maml_utils.std_checkpoint_fct(ckpt_dir=ckpt_dir,
                                         current_episode=episode, current_loss=loss,
                                         params=params, buffers=buffers,
                                         train_data=train_chars, test_data=test_chars,
