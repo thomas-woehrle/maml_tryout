@@ -64,7 +64,7 @@ def inner_loop_update(use_anil: bool, current_ep: int, model: maml_api.MamlModel
 def train(hparams: maml_config.MamlHyperParameters,
           sample_task: Callable[[], maml_api.MamlTask], model: maml_api.MamlModel, checkpoint_fct,
           episode_logger: Callable[[int, float], None] = std_log,
-          do_use_mlflow: bool = False):
+          do_use_mlflow: bool = False, log_model_every_n_episodes: int = 1000):
     """Executes the MAML training loop
 
     Args:
@@ -74,6 +74,7 @@ def train(hparams: maml_config.MamlHyperParameters,
         checkpoint_fct: Checkpoint function called after every episode
         episode_logger: Logging function called after every episode. Defaults to std_log.
         do_use_mlflow: Inidactes whether mlflow should be used
+        log_model_every_n_episodes: Frequency of model logging. First and last will always be logged. (Default: 1000)
     """
     if do_use_mlflow:
         mlflow.log_params(vars(hparams))
@@ -104,4 +105,7 @@ def train(hparams: maml_config.MamlHyperParameters,
         checkpoint_fct(params, buffers, episode, acc_loss)
         if do_use_mlflow:
             mlflow.log_metric("acc_loss", acc_loss.item(), step=episode)
+            if episode % log_model_every_n_episodes == 0 or episode == hparams.n_episodes - 1:
+                example_x = sample_task().sample(maml_api.SampleMode.QUERY, episode)[0].numpy()
+                mlflow.pytorch.log_model(model, f'models/ep{episode}', input_example=example_x)
         episode_logger(episode, acc_loss)
