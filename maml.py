@@ -1,5 +1,6 @@
 from typing import Callable
 
+import mlflow
 import torch.optim as optim
 from torch import autograd
 
@@ -62,7 +63,8 @@ def inner_loop_update(use_anil: bool, current_ep: int, model: maml_api.MamlModel
 
 def train(hparams: maml_config.MamlHyperParameters,
           sample_task: Callable[[], maml_api.MamlTask], model: maml_api.MamlModel, checkpoint_fct,
-          episode_logger: Callable[[int, float], None] = std_log):
+          episode_logger: Callable[[int, float], None] = std_log,
+          do_use_mlflow: bool = False):
     """Executes the MAML training loop
 
     Args:
@@ -71,7 +73,11 @@ def train(hparams: maml_config.MamlHyperParameters,
         model: Model to train
         checkpoint_fct: Checkpoint function called after every episode
         episode_logger: Logging function called after every episode. Defaults to std_log.
+        do_use_mlflow: Inidactes whether mlflow should be used
     """
+    if do_use_mlflow:
+        mlflow.log_params(vars(hparams))
+
     optimizer = optim.SGD(model.parameters(), lr=hparams.beta)
     _, buffers = model.get_state()
 
@@ -96,4 +102,6 @@ def train(hparams: maml_config.MamlHyperParameters,
         acc_loss.backward()
         optimizer.step()
         checkpoint_fct(params, buffers, episode, acc_loss)
+        if do_use_mlflow:
+            mlflow.log_metric("acc_loss", acc_loss.item(), step=episode)
         episode_logger(episode, acc_loss)

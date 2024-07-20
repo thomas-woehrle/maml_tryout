@@ -44,7 +44,7 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
                                         train_data=train_chars, test_data=test_chars,
                                         maml_hparams=maml_hparams, env_config=env_config, other_config=other_config)
 
-    maml.train(maml_hparams, sample_task, omniglotModel, checkpoint_fct)
+    maml.train(maml_hparams, sample_task, omniglotModel, checkpoint_fct, do_use_mlflow=True)
 
 
 if __name__ == '__main__':
