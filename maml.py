@@ -1,16 +1,12 @@
-from typing import Callable
+from typing import Callable, Optional
 
 import mlflow
+import torch
 import torch.optim as optim
 from torch import autograd
 
 import maml_config
 import maml_api
-
-
-def std_log(episode: int, loss: float):
-    if episode % 1 == 0:
-        print(f'{episode}: {loss}')
 
 
 def inner_loop_update_for_testing(anil, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha, inner_gradient_steps, current_ep=-1):
@@ -62,8 +58,8 @@ def inner_loop_update(use_anil: bool, current_ep: int, model: maml_api.MamlModel
 
 
 def train(hparams: maml_config.MamlHyperParameters,
-          sample_task: Callable[[], maml_api.MamlTask], model: maml_api.MamlModel, checkpoint_fct,
-          episode_logger: Callable[[int, float], None] = std_log,
+          sample_task: Callable[[], maml_api.MamlTask], model: maml_api.MamlModel,
+          end_of_episode_fct: Optional[Callable] = None,
           do_use_mlflow: bool = False, log_model_every_n_episodes: int = 1000):
     """Executes the MAML training loop
 
@@ -71,8 +67,8 @@ def train(hparams: maml_config.MamlHyperParameters,
         hparams: Hyperparameters relevant for MAML.
         sample_task: Function used to sample tasks i.e. x and y in the supervised case
         model: Model to train
-        checkpoint_fct: Checkpoint function called after every episode
-        episode_logger: Logging function called after every episode. Defaults to std_log.
+        end_of_episode_fct: Function called at the end of an episode.
+                            Gets passed the parameters, buffers, episode and acc_loss.
         do_use_mlflow: Inidactes whether mlflow should be used
         log_model_every_n_episodes: Frequency of model logging. First and last will always be logged. (Default: 1000)
     """
@@ -85,7 +81,7 @@ def train(hparams: maml_config.MamlHyperParameters,
     for episode in range(hparams.n_episodes):
         optimizer.zero_grad()
         params, _ = model.get_state()
-        acc_loss = 0.0  # Accumulated loss -> will become tensor
+        acc_loss = torch.tensor(0.0)  # Accumulated loss -> will become tensor
 
         for i in range(hparams.meta_batch_size):
             mode = maml_api.SampleMode.QUERY
@@ -102,10 +98,12 @@ def train(hparams: maml_config.MamlHyperParameters,
 
         acc_loss.backward()
         optimizer.step()
-        checkpoint_fct(params, buffers, episode, acc_loss)
+
         if do_use_mlflow:
             mlflow.log_metric("acc_loss", acc_loss.item(), step=episode)
             if episode % log_model_every_n_episodes == 0 or episode == hparams.n_episodes - 1:
                 example_x = sample_task().sample(maml_api.SampleMode.QUERY, episode)[0].numpy()
                 mlflow.pytorch.log_model(model, f'models/ep{episode}', input_example=example_x)
-        episode_logger(episode, acc_loss)
+
+        if end_of_episode_fct is not None:
+            end_of_episode_fct(params, buffers, episode, acc_loss)
