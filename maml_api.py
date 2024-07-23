@@ -5,11 +5,15 @@ import torch
 import torch.nn as nn
 
 
-class SampleMode(enum.Enum):
-    """Represents the mode in which sampling from a task should happen."""
-    QUERY = enum.auto()
-    SUPPORT = enum.auto()
-    # Maybe add TEST or FINETUNE mode ?
+class TrainingStage(enum.Enum):
+    """Represents the training stage of the MAML algorithm.
+
+    TrainingStage and SampleMode combined, determine which datapool to use.
+    TRAIN, EVAL and TEST refer to datasets, which themselves are split into QUERY and SUPPORT data/tasks
+    according to MAML theory"""
+    TRAIN = enum.auto()
+    EVAL = enum.auto()
+    TEST = enum.auto()
 
 
 class MamlModel(nn.Module):
@@ -48,26 +52,20 @@ class MamlTask(Protocol):
     """Protocol representing a task as it is used in MAML.
     """
 
-    def sample(self, mode: SampleMode, current_ep: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Samples from the task. 
-
-        Args:
-            mode: The current mode. Won't play a role in all use cases.
-            current_ep: The current episode. Won't play a role in all use cases.
 
         Returns:
             A tuple of x and y, i.e. input and label
         """
         ...
 
-    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor, mode: SampleMode, current_ep: int) -> torch.Tensor:
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         """Calculates the loss as specified by the task. 
 
         Args:
             y_hat: The prediction
             y: The target
-            mode: The current mode. 
-            current_ep: The current episode.
 
         Returns:
             A tensor containing the loss. Has to be a single value

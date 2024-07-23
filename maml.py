@@ -9,14 +9,15 @@ import maml_config
 import maml_api
 
 
-def inner_loop_update_for_testing(anil, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha, inner_gradient_steps, current_ep=-1):
+def inner_loop_update_for_testing(anil, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha,
+                                  inner_gradient_steps):
     # NOTE ONLY TEMPORARY
-    x_support, y_support = task.sample(maml_api.SampleMode.SUPPORT, current_ep)
+    x_support, y_support = task.sample()
     params_i = {n: p for n, p in params.items()}
     for i in range(inner_gradient_steps):
         x_hat = model.func_forward(x_support, params_i, buffers)
         train_loss = task.calc_loss(
-            x_hat, y_support, maml_api.SampleMode.SUPPORT, current_ep)
+            x_hat, y_support)
         if anil:
             head = {n: p for n, p in params_i.items() if n.startswith('head')
                     }  # NOTE assumes that head is assigned via self.head = ...
@@ -35,12 +36,12 @@ def inner_loop_update_for_testing(anil, model: maml_api.MamlModel, params, buffe
     return params_i
 
 
-def inner_loop_update(use_anil: bool, current_ep: int, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha: float, inner_gradient_steps: int):
+def inner_loop_update(use_anil: bool, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha: float,
+                      inner_gradient_steps: int):
     inner_gradient_steps = 1  # NOTE assumption for now
-    mode = maml_api.SampleMode.SUPPORT
-    x_support, y_support = task.sample(mode, current_ep)
+    x_support, y_support = task.sample()
     x_hat = model.func_forward(x_support, params, buffers)
-    train_loss = task.calc_loss(x_hat, y_support, mode, current_ep)
+    train_loss = task.calc_loss(x_hat, y_support)
     if use_anil:
         head = {n: p for n, p in params.items() if n.startswith('head')
                 }  # NOTE assumes that head is assigned via self.head = ...
@@ -81,28 +82,30 @@ def train(hparams: maml_config.MamlHyperParameters,
     for episode in range(hparams.n_episodes):
         optimizer.zero_grad()
         params, _ = model.get_state()
-        acc_loss = torch.tensor(0.0)  # Accumulated loss -> will become tensor
+        acc_loss = torch.tensor(0.0)  # Accumulated loss
 
         for i in range(hparams.meta_batch_size):
-            mode = maml_api.SampleMode.QUERY
             task = sample_task()
 
-            params_i = inner_loop_update(hparams.use_anil, episode, model,
+            params_i = inner_loop_update(hparams.use_anil, model,
                                          params, buffers, task, hparams.alpha, hparams.inner_gradient_steps)
 
             # Meta update
-            x_query, y_query = task.sample(mode, episode)
+            x_query, y_query = task.sample()
             test_loss = task.calc_loss(
-                model.func_forward(x_query, params_i, buffers), y_query, mode, episode)
+                model.func_forward(x_query, params_i, buffers), y_query)
             acc_loss += test_loss
 
         acc_loss.backward()
         optimizer.step()
 
+        # calculate evaluation loss
+        # TODO
+
         if do_use_mlflow:
             mlflow.log_metric("acc_loss", acc_loss.item(), step=episode)
             if episode % log_model_every_n_episodes == 0 or episode == hparams.n_episodes - 1:
-                example_x = sample_task().sample(maml_api.SampleMode.QUERY, episode)[0].numpy()
+                example_x = sample_task().sample()[0].numpy()
                 mlflow.pytorch.log_model(model, f'models/ep{episode}', input_example=example_x)
 
         if end_of_episode_fct is not None:

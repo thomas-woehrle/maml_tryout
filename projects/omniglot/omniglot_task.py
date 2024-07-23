@@ -23,7 +23,7 @@ class OmniglotTask(maml_api.MamlTask):
         self._loss_fct = nn.CrossEntropyLoss(
             reduction='sum')  # NOTE reduction=... ?
 
-    def sample(self, mode: maml_api.SampleMode, current_ep: int):
+    def sample(self):
         x = []  # will be transformed to a tensor later
         y = []  # same here
         for i, char in enumerate(self.chars):
@@ -39,5 +39,5 @@ class OmniglotTask(maml_api.MamlTask):
 
         return x.to(self.device), y.to(self.device)
 
-    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor, mode: maml_api.SampleMode, current_ep: int):
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor):
         return self._loss_fct(y_hat, y)
