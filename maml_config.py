@@ -1,8 +1,11 @@
+import argparse
 import json
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import torch
+
+import maml_logging
 
 
 @dataclass
@@ -36,14 +39,12 @@ class EnvConfig():
 
     Attributes:
         device: A torch.device.
-        ckpt_base: The base of the checkpoint directory.
         data_dir: The path to the data to be used.
-        run_name: The name of this run.
+        do_use_mlflow: Indicates whether to use MLFlow tracking or not.
     """
     device: torch.device
-    ckpt_base: str
     data_dir: str
-    run_name: Optional[str] = None
+    do_use_mlflow: bool = False
 
 
 def load_configuration(file_path: str) -> tuple[MamlHyperParameters, EnvConfig, dict[str, Any]]:
@@ -63,12 +64,13 @@ def load_configuration(file_path: str) -> tuple[MamlHyperParameters, EnvConfig, 
         },
         "env_config": {
             "device": "cpu",
-            "ckpt_base": "checkpoints/rowfollow_maml",
             "data_dir": "/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new",
-            "run_name": "some_name"
+            "do_use_mlflow (Optional)": true/false
         },
         "other_config": {
             ...
+            "key": "value",
+            "not": "nested"
         }
     }
 
@@ -86,4 +88,17 @@ def load_configuration(file_path: str) -> tuple[MamlHyperParameters, EnvConfig, 
     env_config = EnvConfig(**data['env_config'])
     other_config = data.get('other_config', {})
 
+    if env_config.do_use_mlflow:
+        maml_logging.log_configuration(maml_hparams, env_config, other_config)
+
+    return maml_hparams, env_config, other_config
+
+
+def parse_maml_args():
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("config_filepath", type=str)
+    config_filepath: str = arg_parser.parse_args().config_filepath
+
+    maml_hparams, env_config, other_config = load_configuration(
+        config_filepath)
     return maml_hparams, env_config, other_config
