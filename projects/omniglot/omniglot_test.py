@@ -1,47 +1,54 @@
-import argparse
 import random
+from typing import List
 
-import torch
+import mlflow
 
 import maml
+import maml_config
 import omniglot_model
 import omniglot_task
 from torchmetrics import classification
 
-parser = argparse.ArgumentParser()
-parser.add_argument('ckpt_path')
-ckpt_path = parser.parse_args().ckpt_path
+# TODO add argparser which takes the different variables in + an entrypoint in MLproject? see comment below this as well
 
-ckpt = torch.load(ckpt_path)
+# maybe use eval-experiments and runs instead of not logging anything
+mlflow.set_tracking_uri('databricks')
 
-meta_model = models.OmniglotModel(5)
-test_chars = ckpt.get('test_chars', ckpt.get('test_data', None))
-meta_model.load_state_dict(ckpt['model_state_dict'])
-meta_params, buffers = meta_model.get_state()
+run_id = 'abbfb7205d3b4f618acbd77b01aa1405'
+model_path = 'models/ep2'
+n_evaluations = 10
 
-alpha = 0.4  # NOTE only makes sense to use same as alpha from training, right?
-n_evaluations = 100
-n, k = 5, 1
-inner_gradient_steps = 3
+run_url = "runs:/{}".format(run_id)
+
+# load model
+model: omniglot_model.OmniglotModel = mlflow.pytorch.load_model("{}/{}".format(run_url, model_path))
+
+# load and adjust hparams and configuration
+hparams = maml_config.MamlHyperParameters(**mlflow.artifacts.load_dict('{}/{}'.format(run_url, 'hparams.json')))
+hparams.inner_gradient_steps = 3
+n = mlflow.artifacts.load_dict("{}/{}".format(run_url, 'other_config.json'))['n']
+
+val_chars: List[str] = mlflow.artifacts.load_dict("{}/{}".format(run_url, 'chars.json'))['val_chars']
 
 accuracy = classification.MulticlassAccuracy(num_classes=5)
 
-for i in range(n_evaluations):
-    task = tasks.OmniglotTask(random.sample(test_chars, k=n), k, 'cpu')
+params, buffers = model.get_state()
 
-    params_i = meta_params
+for i in range(n_evaluations):
+    task = omniglot_task.OmniglotTask(random.sample(val_chars, k=n), hparams.k, 'cpu')
+
     params_i = maml.inner_loop_update_for_testing(anil=False,
-                                                  model=meta_model,
-                                                  params=meta_params,
+                                                  model=model,
+                                                  params=params,
                                                   buffers=buffers,
                                                   task=task,
-                                                  alpha=alpha,
-                                                  inner_gradient_steps=inner_gradient_steps)
+                                                  alpha=hparams.alpha,
+                                                  inner_gradient_steps=hparams.inner_gradient_steps,)
 
     # meta_model.eval()  # check how this is needed
     # evaluation of capabilities after training
-    x, y = task.sample('query', -1)
-    y_hat = meta_model.func_forward(x, params_i, buffers)
+    x, y = task.sample()
+    y_hat = model.func_forward(x, params_i, buffers)
     # print(y_hat.argmax(dim=1))
     # print(y)
     accuracy.update(y_hat, y)
