@@ -2,10 +2,6 @@ import os
 
 import matplotlib.pyplot as plt
 
-# TODO refactor this
-background_imgs_path = '../../../omniglot_data/images_background'
-eval_imgs_path = '../../../omniglot_data/images_evaluation'
-
 
 def get_chars_from_dir(dir_path):
     chars = []
@@ -20,7 +16,9 @@ def get_chars_from_dir(dir_path):
     return chars
 
 
-def get_all_chars():
+def get_all_chars(base_dir: str):
+    background_imgs_path = os.path.join(base_dir, 'images_background')
+    eval_imgs_path = os.path.join(base_dir, 'images_evaluation')
     all_chars = []
     all_chars += get_chars_from_dir(background_imgs_path)
     all_chars += get_chars_from_dir(eval_imgs_path)

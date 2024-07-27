@@ -15,7 +15,7 @@ import omniglot_utils
 def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig,
          other_config: dict[str, Any]):
     # randomly determine 1200 chars for training, rest for testing
-    omniglot_chars = omniglot_utils.get_all_chars()
+    omniglot_chars = omniglot_utils.get_all_chars(env_config.data_dir)
     random.shuffle(omniglot_chars)  # in-place shuffle
     train_chars = omniglot_chars[:1200]
     val_chars = omniglot_chars[1200:]
