@@ -110,7 +110,7 @@ def train(hparams: maml_config.MamlHyperParameters,
             mlflow.log_metric("eval_loss", eval_loss.item(), step=episode)
             if episode % log_model_every_n_episodes == 0 or episode == hparams.n_episodes - 1:
                 # TrainingStage passed to sample_task shouldn't play a role here
-                example_x = sample_task(maml_api.TrainingStage.TRAIN).sample()[0].numpy()
+                example_x = sample_task(maml_api.TrainingStage.TRAIN).sample()[0].cpu().numpy()
                 mlflow.pytorch.log_model(model, f'models/ep{episode}', input_example=example_x)
 
         if end_of_episode_fct is not None:
