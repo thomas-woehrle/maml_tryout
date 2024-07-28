@@ -79,7 +79,8 @@ def train(hparams: maml_config.MamlHyperParameters,
     for episode in range(hparams.n_episodes):
         optimizer.zero_grad()
         params, _ = model.get_state()
-        acc_loss = torch.tensor(0.0)  # Accumulated loss
+        # Accumulated loss. Will become tensor and this way device will be inferred instead of specified.
+        acc_loss = 0.0
 
         for i in range(hparams.meta_batch_size):
             task = sample_task(maml_api.TrainingStage.TRAIN)
