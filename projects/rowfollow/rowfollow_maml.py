@@ -1,6 +1,8 @@
 import random
 from typing import Any
 
+import mlflow
+
 import maml
 import maml_api
 import maml_config
@@ -16,6 +18,14 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
     train_bags, val_bags = rowfollow_utils.get_train_and_test_bags(
         env_config.data_dir, 4, 5)
     # TODO log into mlflow
+
+    # save train and val bags
+    if env_config.do_use_mlflow:
+        bags_dict = {
+            "train_bags": train_bags,
+            "val_bags": val_bags
+        }
+        mlflow.log_dict(bags_dict, 'bags.json')
 
     def sample_task(training_stage: maml_api.TrainingStage):
         if training_stage == maml_api.TrainingStage.TRAIN:

@@ -65,10 +65,31 @@ def inner_loop_update(use_anil: bool, model: maml_api.MamlModel, params, buffers
     return params_i
 
 
+def calculate_val_loss(model: maml_api.MamlModel, buffers: dict[str, torch.Tensor],
+                       task: maml_api.MamlTask, n: int,
+                       use_anil: bool, alpha: float, inner_gradient_steps: int) -> torch.Tensor:
+    params, _ = model.get_state()
+
+    # finetune parameters
+    ft_params = inner_loop_update_for_testing(use_anil, model, params, buffers, task,
+                                              alpha, inner_gradient_steps)
+
+    # calculate mean of validation loss
+    val_loss = torch.tensor(0.0)
+    for _ in range(n):
+        val_x, val_y = task.sample()
+        val_loss += task.calc_loss(model.func_forward(val_x, ft_params, buffers), val_y)
+
+    return val_loss / n
+
+
 def train(hparams: maml_config.MamlHyperParameters,
           sample_task: Callable[[maml_api.TrainingStage], maml_api.MamlTask], model: maml_api.MamlModel,
           end_of_episode_fct: Optional[Callable] = default_end_of_ep_fct,
-          do_use_mlflow: bool = False, log_model_every_n_episodes: int = 1000):
+          do_use_mlflow: bool = False,
+          n_eval_iters: int = 10,
+          log_eval_loss_every_n_episodes: int = 100,
+          log_model_every_n_episodes: int = 1000):
     """Executes the MAML training loop
 
     Args:
@@ -78,6 +99,9 @@ def train(hparams: maml_config.MamlHyperParameters,
         end_of_episode_fct: Function called at the end of an episode.
                             Gets passed the parameters, buffers, episode, acc_loss, val_loss.
         do_use_mlflow: Inidactes whether mlflow should be used
+        n_eval_iters: Number of iterations for each validation loss calculation
+        log_eval_loss_every_n_episodes: Frequency of eval loss logging.
+                                        First and last will always be logged. (Default: 100)
         log_model_every_n_episodes: Frequency of model logging. First and last will always be logged. (Default: 1000)
     """
     optimizer = optim.SGD(model.parameters(), lr=hparams.beta)
@@ -103,21 +127,24 @@ def train(hparams: maml_config.MamlHyperParameters,
         acc_loss.backward()
         optimizer.step()
 
-        # calculate evaluation loss
-        val_task = sample_task(maml_api.TrainingStage.VAL)
-        episode_end_params, _ = model.get_state()
-        val_params = inner_loop_update_for_testing(hparams.use_anil, model, episode_end_params, buffers, val_task,
-                                                   hparams.alpha, hparams.inner_gradient_steps)
-        val_x, val_y = val_task.sample()
-        val_loss = val_task.calc_loss(model.func_forward(val_x, val_params, buffers), val_y)
-
         if do_use_mlflow:
+            # log acc_loss
             mlflow.log_metric("acc_loss", acc_loss.item(), step=episode)
-            mlflow.log_metric("eval_loss", val_loss.item(), step=episode)
+
+            # log eval_loss under condition
+            if episode % log_eval_loss_every_n_episodes == 0 or episode == hparams.n_episodes - 1:
+                val_loss = calculate_val_loss(model, buffers,
+                                              sample_task(maml_api.TrainingStage.VAL), n_eval_iters,
+                                              hparams.use_anil, hparams.alpha, hparams.inner_gradient_steps)
+                mlflow.log_metric("eval_loss", val_loss.item(), step=episode)
+
+            # log model under condition
             if episode % log_model_every_n_episodes == 0 or episode == hparams.n_episodes - 1:
                 # TrainingStage passed to sample_task shouldn't play a role here
                 example_x = sample_task(maml_api.TrainingStage.TRAIN).sample()[0].numpy()
                 mlflow.pytorch.log_model(model, f'models/ep{episode}', input_example=example_x)
 
         if end_of_episode_fct is not None:
-            end_of_episode_fct(params, buffers, episode, acc_loss.item(), val_loss.item())
+            end_of_episode_fct(params, buffers, episode, acc_loss.item(), 0)  # '0' temporary. ideal: val_loss.item())
+
+    # TODO put buffers back into model?
