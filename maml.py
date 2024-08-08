@@ -1,3 +1,4 @@
+import copy
 from typing import Callable, Optional
 
 import mlflow
@@ -144,8 +145,8 @@ def train(hparams: maml_config.MamlHyperParameters,
             # log model under condition
             if episode % log_model_every_n_episodes == 0 or episode == hparams.n_episodes - 1:
                 # TrainingStage passed to sample_task shouldn't play a role here
-                example_x = sample_task(maml_api.TrainingStage.TRAIN).sample()[0].numpy()
-                mlflow.pytorch.log_model(model, f'models/ep{episode}', input_example=example_x)
+                example_x = sample_task(maml_api.TrainingStage.TRAIN).sample()[0].cpu().numpy()
+                mlflow.pytorch.log_model(copy.deepcopy(model).cpu(), f'models/ep{episode}', input_example=example_x)
 
         if end_of_episode_fct is not None:
             end_of_episode_fct(params, buffers, episode, acc_loss.item(), 0)  # '0' temporary. ideal: val_loss.item())
