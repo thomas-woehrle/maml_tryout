@@ -38,7 +38,7 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
     model = rowfollow_model.RowfollowModel()
     model.to(env_config.device)
 
-    maml.train(maml_hparams, sample_task, model, do_use_mlflow=True)
+    maml.train(maml_hparams, sample_task, model, env_config.device, do_use_mlflow=True)
 
 
 if __name__ == '__main__':

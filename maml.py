@@ -65,7 +65,7 @@ def inner_loop_update(use_anil: bool, model: maml_api.MamlModel, params, buffers
     return params_i
 
 
-def calculate_val_loss(model: maml_api.MamlModel, buffers: dict[str, torch.Tensor],
+def calculate_val_loss(model: maml_api.MamlModel, buffers: dict[str, torch.Tensor], device: torch.device,
                        task: maml_api.MamlTask, n: int,
                        use_anil: bool, alpha: float, inner_gradient_steps: int) -> torch.Tensor:
     params, _ = model.get_state()
@@ -75,7 +75,7 @@ def calculate_val_loss(model: maml_api.MamlModel, buffers: dict[str, torch.Tenso
                                               alpha, inner_gradient_steps)
 
     # calculate mean of validation loss
-    val_loss = torch.tensor(0.0)
+    val_loss = torch.tensor(0.0, device=device)
     for _ in range(n):
         val_x, val_y = task.sample()
         val_loss += task.calc_loss(model.func_forward(val_x, ft_params, buffers), val_y)
@@ -85,6 +85,7 @@ def calculate_val_loss(model: maml_api.MamlModel, buffers: dict[str, torch.Tenso
 
 def train(hparams: maml_config.MamlHyperParameters,
           sample_task: Callable[[maml_api.TrainingStage], maml_api.MamlTask], model: maml_api.MamlModel,
+          device: torch.device,
           end_of_episode_fct: Optional[Callable] = default_end_of_ep_fct,
           do_use_mlflow: bool = False,
           n_eval_iters: int = 10,
@@ -96,6 +97,7 @@ def train(hparams: maml_config.MamlHyperParameters,
         hparams: Hyperparameters relevant for MAML.
         sample_task: Function used to sample tasks i.e. x and y in the supervised case
         model: Model to train
+        device: Device to work on
         end_of_episode_fct: Function called at the end of an episode.
                             Gets passed the parameters, buffers, episode, acc_loss, val_loss.
         do_use_mlflow: Inidactes whether mlflow should be used
@@ -110,7 +112,8 @@ def train(hparams: maml_config.MamlHyperParameters,
     for episode in range(hparams.n_episodes):
         optimizer.zero_grad()
         params, _ = model.get_state()
-        acc_loss = torch.tensor(0.0)  # Accumulated loss
+
+        acc_loss = torch.tensor(0.0, device=device)  # Accumulated loss
 
         for i in range(hparams.meta_batch_size):
             task = sample_task(maml_api.TrainingStage.TRAIN)
@@ -133,7 +136,7 @@ def train(hparams: maml_config.MamlHyperParameters,
 
             # log eval_loss under condition
             if episode % log_eval_loss_every_n_episodes == 0 or episode == hparams.n_episodes - 1:
-                val_loss = calculate_val_loss(model, buffers,
+                val_loss = calculate_val_loss(model, buffers, device,
                                               sample_task(maml_api.TrainingStage.VAL), n_eval_iters,
                                               hparams.use_anil, hparams.alpha, hparams.inner_gradient_steps)
                 mlflow.log_metric("eval_loss", val_loss.item(), step=episode)
