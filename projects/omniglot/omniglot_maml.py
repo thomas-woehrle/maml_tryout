@@ -41,7 +41,7 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
     omniglotModel = omniglot_model.OmniglotModel(other_config['n'])
     omniglotModel.to(env_config.device)
 
-    maml.train(maml_hparams, sample_task, omniglotModel, do_use_mlflow=env_config.do_use_mlflow)
+    maml.train(maml_hparams, sample_task, omniglotModel, env_config.device, do_use_mlflow=env_config.do_use_mlflow)
 
 
 if __name__ == '__main__':

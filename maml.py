@@ -17,52 +17,28 @@ def default_end_of_ep_fct(params, buffers: torch.tensor,
     print('val_loss :', val_loss)
 
 
-def inner_loop_update_for_testing(anil, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha,
-                                  inner_gradient_steps):
-    # NOTE ONLY TEMPORARY
+def inner_loop_update(use_anil: bool, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha: float,
+                      inner_gradient_steps: int):
     x_support, y_support = task.sample()
     params_i = {n: p for n, p in params.items()}
-    for i in range(inner_gradient_steps):
-        x_hat = model.func_forward(x_support, params_i, buffers)
-        train_loss = task.calc_loss(
-            x_hat, y_support)
-        if anil:
+    for _ in range(inner_gradient_steps):
+        y_hat = model.func_forward(x_support, params_i, buffers)
+        train_loss = task.calc_loss(y_hat, y_support)
+        if use_anil:
             head = {n: p for n, p in params_i.items() if n.startswith('head')
-                    }  # NOTE assumes that head is assigned via self.head = ...
+                    }  # assumes that head is assigned via self.head = ...
             head_grads = autograd.grad(
-                train_loss, head.values(), create_graph=False)
-            # create_graph=True should enable second order, also leads to slower execution
+                train_loss, head.values(), create_graph=True)
+            # create_graph=True enables second order, also leads to slower execution
             head_i = {n: p - alpha *
-                      g for (n, p), g in zip(head.items(), head_grads)}
+                         g for (n, p), g in zip(head.items(), head_grads)}
             params_i = {**params_i, **head_i}
         else:
             grads = autograd.grad(
-                train_loss, params_i.values(), create_graph=False)
-            # create_graph=True should enable second order, also leads to slower execution
+                train_loss, params_i.values(), create_graph=True)
+
             params_i = {n: p - alpha *
-                        g for (n, p), g in zip(params_i.items(), grads)}
-    return params_i
-
-
-def inner_loop_update(use_anil: bool, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha: float,
-                      inner_gradient_steps: int):
-    inner_gradient_steps = 1  # NOTE assumption for now
-    x_support, y_support = task.sample()
-    x_hat = model.func_forward(x_support, params, buffers)
-    train_loss = task.calc_loss(x_hat, y_support)
-    if use_anil:
-        head = {n: p for n, p in params.items() if n.startswith('head')
-                }  # NOTE assumes that head is assigned via self.head = ...
-        head_grads = autograd.grad(
-            train_loss, head.values(), create_graph=True)
-        # create_graph=True should enable second order, also leads to slower execution
-        head_i = {n: p - alpha *
-                  g for (n, p), g in zip(head.items(), head_grads)}
-        params_i = {**params, **head_i}
-    else:
-        grads = autograd.grad(train_loss, params.values(), create_graph=True)
-        params_i = {n: p - alpha *
-                    g for (n, p), g in zip(params.items(), grads)}
+                           g for (n, p), g in zip(params_i.items(), grads)}
     return params_i
 
 
@@ -72,7 +48,7 @@ def calculate_val_loss(model: maml_api.MamlModel, buffers: dict[str, torch.Tenso
     params, _ = model.get_state()
 
     # finetune parameters
-    ft_params = inner_loop_update_for_testing(use_anil, model, params, buffers, task,
+    ft_params = inner_loop_update(use_anil, model, params, buffers, task,
                                               alpha, inner_gradient_steps)
 
     # calculate mean of validation loss
