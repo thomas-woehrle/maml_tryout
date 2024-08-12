@@ -83,15 +83,14 @@ class MamlTrainer:
             loss_weights[-1] = 1 - loss_weights[0] * (len(loss_weights)-1)
 
         loss_weights = torch.Tensor(loss_weights).to(device=self.device)
-        print(loss_weights)
         return loss_weights
 
-    def inner_step(self, x: torch.Tensor, y: torch.Tensor,
+    def inner_step(self, x_support: torch.Tensor, y_support: torch.Tensor,
                    params: NamedParams, buffers: NamedBuffers, task: maml_api.MamlTask,
                    stage: maml_api.Stage) -> NamedParams:
         # TODO add anil back
-        y_hat = self.model.func_forward(x, params, buffers)
-        train_loss = task.calc_loss(y_hat, y)
+        y_hat = self.model.func_forward(x_support, params, buffers)
+        train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
 
         grads = autograd.grad(
             train_loss, params.values(), create_graph=(stage == maml_api.Stage.TRAIN))
@@ -112,14 +111,16 @@ class MamlTrainer:
         per_step_loss_importance_vector = self.get_per_step_loss_importance_vector(stage)
         params_i = {n: p for n, p in params.items()}
         loss = torch.tensor(0.0, device=self.device)
+
         # i symbolizes the i-th step
         for i in range(self.hparams.inner_steps):
             # finetune params
             params_i = self.inner_step(x_support, y_support, params_i, buffers, task, stage)
 
             # calculate target loss using new params
-            target_loss = task.calc_loss(self.model.func_forward(x_target, params_i, buffers), y_target)
-            target_loss *= per_step_loss_importance_vector[i]  # TODO MSL addition
+            target_loss = task.calc_loss(self.model.func_forward(x_target, params_i, buffers), y_target,
+                                         stage, maml_api.SetToSetType.TARGET)
+            target_loss *= per_step_loss_importance_vector[i]
             loss += target_loss
 
         return loss
@@ -145,6 +146,7 @@ class MamlTrainer:
                 mlflow.log_metric("batch_loss", batch_loss.item(), step=episode)
 
                 # log eval_loss under condition
+                # TODO take mean across multiple runs?
                 if episode % self.log_val_loss_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:
                     end_params, _ = self.model.get_state()
                     val_loss = self.meta_forward(end_params, buffers, maml_api.Stage.VAL)

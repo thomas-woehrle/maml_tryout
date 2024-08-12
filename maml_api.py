@@ -16,6 +16,14 @@ class Stage(enum.Enum):
     TEST = enum.auto()
 
 
+class SetToSetType(enum.Enum):
+    """Represents the phase of the MAML algorithm, common in set-to-set learning
+
+    """
+    SUPPORT = enum.auto()
+    TARGET = enum.auto()
+
+
 class MamlModel(nn.Module):
     """The model which will trained using MAML. Can be treated like a normal nn.Module. 
     There might be situations where its base implementations need to be overridden.
@@ -60,12 +68,14 @@ class MamlTask(Protocol):
         """
         ...
 
-    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor, stage: Stage, sts_type: SetToSetType) -> torch.Tensor:
         """Calculates the loss as specified by the task. 
 
         Args:
             y_hat: The prediction
             y: The target
+            stage: The stage ie TRAIN, VAL, TEST, etc.
+            sts_type: The phase of the task ie Support or Target phase
 
         Returns:
             A tensor containing the loss. Has to be a single value

@@ -39,5 +39,6 @@ class OmniglotTask(maml_api.MamlTask):
 
         return x.to(self.device), y.to(self.device)
 
-    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor):
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor,
+                  stage: maml_api.Stage, sts_type: maml_api.SetToSetType):
         return self._loss_fct(y_hat, y)
