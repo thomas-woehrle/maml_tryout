@@ -1,5 +1,7 @@
-from typing import Callable
+import copy
+from typing import Callable, Optional
 
+import mlflow
 import torch.optim as optim
 from torch import autograd
 
@@ -7,19 +9,15 @@ import maml_config
 import maml_api
 
 
-def std_log(episode: int, loss: float):
-    if episode % 1 == 0:
-        print(f'{episode}: {loss}')
-
-
-def inner_loop_update_for_testing(anil, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha, inner_gradient_steps, current_ep=-1):
+def inner_loop_update_for_testing(anil, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha,
+                                  inner_gradient_steps):
     # NOTE ONLY TEMPORARY
-    x_support, y_support = task.sample(maml_api.SampleMode.SUPPORT, current_ep)
+    x_support, y_support = task.sample()
     params_i = {n: p for n, p in params.items()}
     for i in range(inner_gradient_steps):
         x_hat = model.func_forward(x_support, params_i, buffers)
         train_loss = task.calc_loss(
-            x_hat, y_support, maml_api.SampleMode.SUPPORT, current_ep)
+            x_hat, y_support)
         if anil:
             head = {n: p for n, p in params_i.items() if n.startswith('head')
                     }  # NOTE assumes that head is assigned via self.head = ...
@@ -38,12 +36,12 @@ def inner_loop_update_for_testing(anil, model: maml_api.MamlModel, params, buffe
     return params_i
 
 
-def inner_loop_update(use_anil: bool, current_ep: int, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha: float, inner_gradient_steps: int):
+def inner_loop_update(use_anil: bool, model: maml_api.MamlModel, params, buffers, task: maml_api.MamlTask, alpha: float,
+                      inner_gradient_steps: int):
     inner_gradient_steps = 1  # NOTE assumption for now
-    mode = maml_api.SampleMode.SUPPORT
-    x_support, y_support = task.sample(mode, current_ep)
+    x_support, y_support = task.sample()
     x_hat = model.func_forward(x_support, params, buffers)
-    train_loss = task.calc_loss(x_hat, y_support, mode, current_ep)
+    train_loss = task.calc_loss(x_hat, y_support)
     if use_anil:
         head = {n: p for n, p in params.items() if n.startswith('head')
                 }  # NOTE assumes that head is assigned via self.head = ...
@@ -61,16 +59,19 @@ def inner_loop_update(use_anil: bool, current_ep: int, model: maml_api.MamlModel
 
 
 def train(hparams: maml_config.MamlHyperParameters,
-          sample_task: Callable[[], maml_api.MamlTask], model: maml_api.MamlModel, checkpoint_fct,
-          episode_logger: Callable[[int, float], None] = std_log):
+          sample_task: Callable[[maml_api.TrainingStage], maml_api.MamlTask], model: maml_api.MamlModel,
+          end_of_episode_fct: Optional[Callable] = None,
+          do_use_mlflow: bool = False, log_model_every_n_episodes: int = 1000):
     """Executes the MAML training loop
 
     Args:
-        hparams: Hyperparameters relevant to MAML. 
+        hparams: Hyperparameters relevant for MAML.
         sample_task: Function used to sample tasks i.e. x and y in the supervised case
         model: Model to train
-        checkpoint_fct: Checkpoint function called after every episode
-        episode_logger: Logging function called after every episode. Defaults to std_log.
+        end_of_episode_fct: Function called at the end of an episode.
+                            Gets passed the parameters, buffers, episode, acc_loss, eval_loss.
+        do_use_mlflow: Inidactes whether mlflow should be used
+        log_model_every_n_episodes: Frequency of model logging. First and last will always be logged. (Default: 1000)
     """
     optimizer = optim.SGD(model.parameters(), lr=hparams.beta)
     _, buffers = model.get_state()
@@ -78,22 +79,39 @@ def train(hparams: maml_config.MamlHyperParameters,
     for episode in range(hparams.n_episodes):
         optimizer.zero_grad()
         params, _ = model.get_state()
-        acc_loss = 0.0  # Accumulated loss -> will become tensor
+        # Accumulated loss. Will become tensor and this way device will be inferred instead of specified.
+        acc_loss = 0.0
 
         for i in range(hparams.meta_batch_size):
-            mode = maml_api.SampleMode.QUERY
-            task = sample_task()
+            task = sample_task(maml_api.TrainingStage.TRAIN)
 
-            params_i = inner_loop_update(hparams.use_anil, episode, model,
+            params_i = inner_loop_update(hparams.use_anil, model,
                                          params, buffers, task, hparams.alpha, hparams.inner_gradient_steps)
 
             # Meta update
-            x_query, y_query = task.sample(mode, episode)
-            test_loss = task.calc_loss(
-                model.func_forward(x_query, params_i, buffers), y_query, mode, episode)
-            acc_loss += test_loss
+            x_query, y_query = task.sample()
+            query_loss = task.calc_loss(
+                model.func_forward(x_query, params_i, buffers), y_query)
+            acc_loss += query_loss
 
         acc_loss.backward()
         optimizer.step()
-        checkpoint_fct(params, buffers, episode, acc_loss)
-        episode_logger(episode, acc_loss)
+
+        # calculate evaluation loss
+        eval_task = sample_task(maml_api.TrainingStage.EVAL)
+        episode_end_params, _ = model.get_state()
+        eval_params = inner_loop_update_for_testing(hparams.use_anil, model, episode_end_params, buffers, eval_task,
+                                                    hparams.alpha, hparams.inner_gradient_steps)
+        eval_x, eval_y = eval_task.sample()
+        eval_loss = eval_task.calc_loss(model.func_forward(eval_x, eval_params, buffers), eval_y)
+
+        if do_use_mlflow:
+            mlflow.log_metric("acc_loss", acc_loss.item(), step=episode)
+            mlflow.log_metric("eval_loss", eval_loss.item(), step=episode)
+            if episode % log_model_every_n_episodes == 0 or episode == hparams.n_episodes - 1:
+                # TrainingStage passed to sample_task shouldn't play a role here
+                example_x = sample_task(maml_api.TrainingStage.TRAIN).sample()[0].cpu().numpy()
+                mlflow.pytorch.log_model(copy.deepcopy(model).cpu(), f'models/ep{episode}', input_example=example_x)
+
+        if end_of_episode_fct is not None:
+            end_of_episode_fct(params, buffers, episode, acc_loss, eval_loss)

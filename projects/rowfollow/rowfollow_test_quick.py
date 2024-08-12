@@ -11,9 +11,8 @@ import torch.nn as nn
 from rf_utils import viz, vision
 
 import maml
-import models
 import rowfollow_utils as utils
-import tasks
+from projects.omniglot import omniglot_task, omniglot_model
 
 
 def write_to_csv(file_path, content: dict):
@@ -73,13 +72,13 @@ def get_data(base_path, df, device):
 def calc_loss(ckpt_path, stage, device, seed, no_finetuning, k, inner_gradient_steps, alpha, sigma):
     if stage == 'early':
         finetune_data_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/ts_2022_06_03_02h54m54s'
-        eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20220603_cornfield-10handpicked/ts_2022_06_03_02h54m54s'
+        eval_data_path = '/test_data/20220603_cornfield-10handpicked/ts_2022_06_03_02h54m54s'
     elif stage == 'late':
         finetune_data_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20221006_cornfield/ts_2022_10_06_10h29m23s_two_random'
-        eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20221006_cornfield-10handpicked/ts_2022_10_06_10h29m23s_two_random'
+        eval_data_path = '/test_data/20221006_cornfield-10handpicked/ts_2022_10_06_10h29m23s_two_random'
     elif stage == 'middle':
         finetune_data_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220714_cornfield/ts_2022_07_14_12h17m57s_two_random/'
-        eval_data_path = '/Users/tomwoehrle/Documents/research_assistance/maml_tryout/test_data/20220714_cornfield-10handpicked/ts_2022_07_14_12h17m57s_two_random/'
+        eval_data_path = '/test_data/20220714_cornfield-10handpicked/ts_2022_07_14_12h17m57s_two_random/'
 
     ckpt = torch.load(ckpt_path, map_location=device)
     model = models.RowfollowModel()
@@ -148,7 +147,7 @@ if __name__ == '__main__':
 
     losses = []  # n_runsxNx3
     losses_on_frame = []  # n_runsxNx3
-    mean_losses = []  # n_runsx3, where the Nx3 were reduced to 3 by taking the mean. means per run are stored here
+    mean_losses = []  # n_runsx3, where the Nx3 were reduced to 3 by taking the mean. means per run_configs are stored here
     mean_losses_on_frame = []  # n_runsx3
     all_imgs = []  # n_runsxN
     for i in range(args.n_runs):
