@@ -1,6 +1,7 @@
 import copy
 from typing import Callable
 
+import numpy as np
 import mlflow
 import torch
 import torch.optim as optim
@@ -49,6 +50,41 @@ class MamlTrainer:
         self.n_val_iters: int = n_val_iters
         self.log_val_loss_every_n_episodes: int = log_val_loss_every_n_episodes
         self.log_model_every_n_episodes: int = log_model_every_n_episodes
+        self.multi_step_loss_n_episodes: int = int(hparams.n_episodes * 0.1) or 1
+
+        self.current_episode: int = 0
+
+    def get_per_step_loss_importance_vector(self, stage: maml_api.Stage) -> torch.Tensor:
+        # Adapted from: https://github.com/AntreasAntoniou/HowToTrainYourMAMLPytorch
+        """
+        Generates a tensor of dimensionality (num_inner_loop_steps) indicating the importance of each step's target
+        loss towards the optimization loss.
+
+        Args:
+            stage: The current stage of MAML.
+
+        Returns:
+            The loss importance vector.
+        """
+        # If Val stage, then only the last step loss is important TODO is this actually the case?
+        if stage == maml_api.Stage.VAL:
+            loss_weights = np.zeros(self.hparams.inner_steps, dtype=np.float32)
+            loss_weights[-1] = 1.0
+        else:
+            loss_weights = np.ones(self.hparams.inner_steps, dtype=np.float32) / self.hparams.inner_steps
+            decay_rate = 1.0 / self.hparams.inner_steps / self.multi_step_loss_n_episodes
+            min_value_for_non_final_losses = 0.03 / self.hparams.inner_steps
+            for i in range(len(loss_weights) - 1):
+                loss_weights[i] = np.maximum(loss_weights[i] - (self.current_episode * decay_rate),
+                                             min_value_for_non_final_losses)
+            loss_weights[-1] = np.minimum(
+                loss_weights[-1] + (self.current_episode * (self.hparams.inner_steps - 1) * decay_rate),
+                1.0 - ((self.hparams.inner_steps - 1) * min_value_for_non_final_losses))
+            loss_weights[-1] = 1 - loss_weights[0] * (len(loss_weights)-1)
+
+        loss_weights = torch.Tensor(loss_weights).to(device=self.device)
+        print(loss_weights)
+        return loss_weights
 
     def inner_step(self, x: torch.Tensor, y: torch.Tensor,
                    params: NamedParams, buffers: NamedBuffers, task: maml_api.MamlTask,
@@ -73,6 +109,7 @@ class MamlTrainer:
         x_support, y_support = task.sample()
         x_target, y_target = task.sample()
 
+        per_step_loss_importance_vector = self.get_per_step_loss_importance_vector(stage)
         params_i = {n: p for n, p in params.items()}
         loss = torch.tensor(0.0, device=self.device)
         # i symbolizes the i-th step
@@ -82,7 +119,7 @@ class MamlTrainer:
 
             # calculate target loss using new params
             target_loss = task.calc_loss(self.model.func_forward(x_target, params_i, buffers), y_target)
-            target_loss *= 1 if (i == self.hparams.inner_steps-1) else 0  # TODO MSL addition
+            target_loss *= per_step_loss_importance_vector[i]  # TODO MSL addition
             loss += target_loss
 
         return loss
@@ -92,6 +129,7 @@ class MamlTrainer:
         _, buffers = self.model.get_state()
 
         for episode in range(self.hparams.n_episodes):
+            self.current_episode = episode
             optimizer.zero_grad()
             params, _ = self.model.get_state()
 
