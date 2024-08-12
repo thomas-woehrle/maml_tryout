@@ -17,7 +17,7 @@ class MamlHyperParameters():
         use_anil: Indicates whether ANIL should be used. Defaults to False.
         n_episodes: The number of episodes. Defaults to 10_000.
         meta_batch_size: Number of tasks per episode. Defaults to 32.
-        inner_gradient_steps: Number of gradient steps in the inner loop. Defaults to 1.
+        inner_steps: Number of gradient steps in the inner loop. Defaults to 1.
         k: Number of samples per task. Defaults to 4.
         alpha: Inner learning rate. Defaults to 0.4.
         beta: Outer learning rate. Defaults to 0.001.
@@ -26,7 +26,7 @@ class MamlHyperParameters():
     use_anil: bool = False
     n_episodes: int = 10_000
     meta_batch_size: int = 32
-    inner_gradient_steps: int = 1
+    inner_steps: int = 1
     k: int = 4
     alpha: float = 0.4
     beta: float = 0.001

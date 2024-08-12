@@ -25,7 +25,7 @@ model: omniglot_model.OmniglotModel = mlflow.pytorch.load_model("{}/{}".format(r
 
 # load and adjust hparams and configuration
 hparams = maml_config.MamlHyperParameters(**mlflow.artifacts.load_dict('{}/{}'.format(run_url, 'hparams.json')))
-hparams.inner_gradient_steps = 3
+hparams.inner_steps = 3
 n = mlflow.artifacts.load_dict("{}/{}".format(run_url, 'other_config.json'))['n']
 
 val_chars: List[str] = mlflow.artifacts.load_dict("{}/{}".format(run_url, 'chars.json'))['val_chars']
@@ -43,7 +43,7 @@ for i in range(n_evaluations):
                                                   buffers=buffers,
                                                   task=task,
                                                   alpha=hparams.alpha,
-                                                  inner_gradient_steps=hparams.inner_gradient_steps,)
+                                                  inner_gradient_steps=hparams.inner_steps, )
 
     # meta_model.eval()  # check how this is needed
     # evaluation of capabilities after training

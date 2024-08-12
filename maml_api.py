@@ -5,11 +5,11 @@ import torch
 import torch.nn as nn
 
 
-class TrainingStage(enum.Enum):
+class Stage(enum.Enum):
     """Represents the training stage of the MAML algorithm.
 
     TrainingStage and SampleMode combined, determine which datapool to use.
-    TRAIN, EVAL and TEST refer to datasets, which themselves are split into QUERY and SUPPORT data/tasks
+    TRAIN, VAL and TEST refer to datasets, which themselves are split into QUERY and SUPPORT data/tasks
     according to MAML theory"""
     TRAIN = enum.auto()
     VAL = enum.auto()

@@ -3,7 +3,7 @@
     "use_anil": false,
     "n_episodes": 1,
     "meta_batch_size": 4,
-    "inner_gradient_steps": 1,
+    "inner_steps": 1,
     "k": 4,
     "alpha": 0.4,
     "beta": 0.001
