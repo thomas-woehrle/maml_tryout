@@ -12,7 +12,7 @@ class TrainingStage(enum.Enum):
     TRAIN, EVAL and TEST refer to datasets, which themselves are split into QUERY and SUPPORT data/tasks
     according to MAML theory"""
     TRAIN = enum.auto()
-    EVAL = enum.auto()
+    VAL = enum.auto()
     TEST = enum.auto()
 
 

@@ -1,17 +1,17 @@
 {
   "maml_hparams": {
     "use_anil": false,
-    "n_episodes": 60000,
+    "n_episodes": 3,
     "meta_batch_size": 32,
-    "inner_gradient_steps": 1,
+    "inner_gradient_steps": 2,
     "k": 1,
     "alpha": 0.4,
     "beta": 0.001
   },
   "env_config": {
     "device": "cpu",
-    "ckpt_base": "/Users/tomwoehrle/Documents/research_assistance/maml/checkpoints/omniglot_maml",
-    "data_dir": "/Users/tomwoehrle/Documents/research_assistance/maml/omniglot_data"
+    "data_dir": "/Users/tomwoehrle/Documents/research_assistance/maml/omniglot_data",
+    "do_use_mlflow": true
   },
   "other_config": {
     "n": 5

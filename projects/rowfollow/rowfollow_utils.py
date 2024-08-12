@@ -48,7 +48,7 @@ def dist_from_keypoint(center: tuple[int, int], image_size: tuple[int, int] = (8
     xx, yy = np.meshgrid(x_axis, y_axis)
     kernel = np.exp(-0.5 * (np.square(xx) + np.square(yy)) / np.square(sig))
     kernel = torch.from_numpy(kernel)
-    # NOTE probably should split this function into two, but not now
+    # TODO probably should split this function into two (because of SoC), but not now
     kernel = F.softmax(kernel.view(-1), dim=0).view_as(kernel)
     return kernel
 

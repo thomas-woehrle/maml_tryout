@@ -11,7 +11,7 @@ from projects.rowfollow import rowfollow_utils as utils
 
 
 class RowfollowTask(maml_api.MamlTask):
-    """Task used in the case of rowfollow. One task represents one run_configs"""
+    """Task used in the case of rowfollow. One task represents one day (as of 07/25/24)"""
 
     def __init__(self, bag_path: str, k: int, device: torch.device, sigma: int = 10, seed=None):
         """
@@ -35,7 +35,7 @@ class RowfollowTask(maml_api.MamlTask):
         self.device = device
         self.sigma = sigma
 
-    def sample(self, mode: maml_api.SampleMode, current_ep: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self) -> tuple[torch.Tensor, torch.Tensor]:
         samples = self.labels.sample(self.k, random_state=self.seed)
         x = []
         y = []
@@ -61,7 +61,7 @@ class RowfollowTask(maml_api.MamlTask):
 
         return x.to(self.device), y.to(self.device)
 
-    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor, mode: maml_api.SampleMode, current_ep: int):
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor):
         """See also description of MamlTask
 
         Args:
@@ -71,6 +71,8 @@ class RowfollowTask(maml_api.MamlTask):
         Returns:
             KL-divergence loss of y_hat and y
         """
-        y_hat = F.log_softmax(y_hat.view(
-            *y_hat.size()[:2], -1), 2).view_as(y_hat)
-        return self._loss_fct(y_hat[:, 0], y[:, 0]) + self._loss_fct(y_hat[:, 1], y[:, 1]) + self._loss_fct(y_hat[:, 2], y[:, 2])
+        y_hat = F.log_softmax(y_hat.view(*y_hat.size()[:2], -1), 2).view_as(y_hat)
+
+        return (self._loss_fct(y_hat[:, 0], y[:, 0])
+                + self._loss_fct(y_hat[:, 1], y[:, 1])
+                + self._loss_fct(y_hat[:, 2], y[:, 2]))

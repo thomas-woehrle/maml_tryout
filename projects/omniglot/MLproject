@@ -10,4 +10,7 @@ name: Omniglot MAML
 entry_points:
   main:
     # adjust PYTHONPATH so that imports work
-    command: "PYTHONPATH=../../ python omniglot_maml.py run_configs/omniglot_5way1shot.json"
+    # specify env variable MLFLOW_TRACKING_URI if needed
+    parameters:
+      config_file: path
+    command: "PYTHONPATH=../../ python omniglot_maml.py {config_file}"
