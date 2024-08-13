@@ -1,7 +1,7 @@
 {
   "maml_hparams": {
     "use_anil": false,
-    "n_episodes": 1,
+    "n_episodes": 2,
     "meta_batch_size": 4,
     "inner_steps": 1,
     "k": 4,

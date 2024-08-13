@@ -50,7 +50,10 @@ class MamlTrainer:
         self.n_val_iters: int = n_val_iters
         self.log_val_loss_every_n_episodes: int = log_val_loss_every_n_episodes
         self.log_model_every_n_episodes: int = log_model_every_n_episodes
+        # the first 10 percent of episodes will use strong multi-step loss updates, afterward weak
         self.multi_step_loss_n_episodes: int = int(hparams.n_episodes * 0.1) or 1
+        # the first 30 percent of episodes will use first order updates
+        self.first_order_updates_n_episodes: int = int(hparams.n_episodes * 0.3)
 
         self.current_episode: int = 0
 
@@ -92,8 +95,11 @@ class MamlTrainer:
         y_hat = self.model.func_forward(x_support, params, buffers)
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
 
+        mlflow.log_metric("second_order_true", int(self.current_episode > self.first_order_updates_n_episodes),
+                          self.current_episode)
         grads = autograd.grad(
-            train_loss, params.values(), create_graph=(stage == maml_api.Stage.TRAIN))
+            train_loss, params.values(), create_graph=(stage == maml_api.Stage.TRAIN
+                                                       and self.current_episode > self.first_order_updates_n_episodes))
 
         return {n: p - self.hparams.alpha *
                        g for (n, p), g in zip(params.items(), grads)}

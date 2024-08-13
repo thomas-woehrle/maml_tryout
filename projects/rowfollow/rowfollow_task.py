@@ -16,7 +16,6 @@ def l1_distance_argmax_sum(y_hat, y, reduction='mean'):
 
     # Reshape y and y_hat to (N, 3, h*w) for argmax calculation
     N, C, H, W = y.shape
-    print(y.shape)
     y = y.view(N, C, -1)
     y_hat = y_hat.view(N, C, -1)
 
