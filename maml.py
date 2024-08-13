@@ -126,7 +126,7 @@ class MamlTrainer:
         return loss
 
     def train(self):
-        optimizer = optim.SGD(self.model.parameters(), lr=self.hparams.beta)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.hparams.beta)
         _, buffers = self.model.get_state()
 
         for episode in range(self.hparams.n_episodes):

@@ -33,7 +33,7 @@ class MamlHyperParameters():
 
 
 @dataclass
-class EnvConfig():
+class EnvConfig:
     """
     Class representing configuration variables needed in almost all cases.
 
