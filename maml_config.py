@@ -30,6 +30,7 @@ class MamlHyperParameters():
     k: int = 4
     alpha: float = 0.4
     beta: float = 0.001
+    min_beta: float = 0.00001
 
 
 @dataclass

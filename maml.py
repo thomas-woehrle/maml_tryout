@@ -133,6 +133,8 @@ class MamlTrainer:
 
     def train(self):
         optimizer = optim.Adam(self.model.parameters(), lr=self.hparams.beta)
+        lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.hparams.n_episodes,
+                                                         eta_min=self.hparams.min_beta)
         _, buffers = self.model.get_state()
 
         for episode in range(self.hparams.n_episodes):
@@ -146,6 +148,10 @@ class MamlTrainer:
 
             batch_loss.backward()
             optimizer.step()
+
+            # log current lr then step
+            mlflow.log_metric("lr", lr_scheduler.get_last_lr()[0], episode)
+            lr_scheduler.step()
 
             if self.do_use_mlflow:
                 # log acc_loss
