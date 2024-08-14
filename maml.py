@@ -158,9 +158,10 @@ class MamlTrainer:
                 mlflow.log_metric("batch_loss", batch_loss.item(), step=episode)
 
                 # log eval_loss under condition
-                # TODO take mean across multiple runs?
                 if episode % self.log_val_loss_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:
                     end_params, _ = self.model.get_state()
+                    # TODO take mean across multiple runs?
+                    # TODO the val_loss shouldn't just be the meta_forward loss ?
                     val_loss = self.meta_forward(end_params, buffers, maml_api.Stage.VAL)
                     mlflow.log_metric("val_loss", val_loss.item(), step=episode)
 

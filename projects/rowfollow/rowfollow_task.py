@@ -45,7 +45,8 @@ def l1_distance_argmax_sum(y_hat, y, reduction='mean'):
 class RowfollowTask(maml_api.MamlTask):
     """Task used in the case of rowfollow. One task represents one day (as of 07/25/24)"""
 
-    def __init__(self, bag_path: str, k: int, device: torch.device, sigma: int = 10, seed=None):
+    def __init__(self, bag_path: str, k: int,
+                 device: torch.device, sigma: int = 10, seed=None, cam_side: str = 'both'):
         """
         Args:
             bag_path: Path to the bag/run_configs for this task.
@@ -56,25 +57,30 @@ class RowfollowTask(maml_api.MamlTask):
         """
         self.bag_path = bag_path
         self.k = k
-        df_left = pd.read_csv(
-            os.path.join(bag_path, 'left_cam', 'labels.csv'))
-        df_right = pd.read_csv(
-            os.path.join(bag_path, 'right_cam', 'labels.csv'))
-        self.labels = pd.concat([df_left, df_right], keys=[
-                                'left_cam', 'right_cam'], names=['cam_side']).reset_index(level=0).reset_index(drop=True)
+        if cam_side == 'left_cam' or cam_side == 'right_cam':
+            self.labels = pd.read_csv(os.path.join(bag_path, cam_side, 'labels.csv'))
+            self.labels['cam_side'] = cam_side
+        elif cam_side == 'both':
+            df_left = pd.read_csv(os.path.join(bag_path, 'left_cam', 'labels.csv'))
+            df_right = pd.read_csv(os.path.join(bag_path, 'right_cam', 'labels.csv'))
+            self.labels = pd.concat([df_left, df_right],
+                                    keys=['left_cam', 'right_cam'],
+                                    names=['cam_side']).reset_index(level=0).reset_index(drop=True)
+        else:
+            raise ValueError('cam_side must be either "left_cam", "right_cam" or "both".')
+
         self.seed = seed
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')
         self.device = device
         self.sigma = sigma
 
     def sample(self) -> tuple[torch.Tensor, torch.Tensor]:
-        samples = self.labels.sample(self.k, random_state=self.seed)
+        samples = self.labels.sample(self.k, random_state=self.seed, replace=False)
         x = []
         y = []
 
         for idx, sample in samples.iterrows():
-            image_path = os.path.join(
-                self.bag_path, sample.cam_side, sample.image_name)
+            image_path = os.path.join(self.bag_path, sample.cam_side, sample.image_name)
             pre_processed_image, _ = utils.pre_process_image(image_path)
             pre_processed_image = torch.from_numpy(
                 pre_processed_image)
