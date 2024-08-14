@@ -35,7 +35,7 @@ class Logger:
         self.logs_buffer: dict[str, Log] = dict()
 
     def log_metric(self, key: str, value: float, step: int):
-        self.logs_buffer['key'] = Log(key, value, step)
+        self.logs_buffer[key] = Log(key, value, step)
 
     def log_buffer_to_mlflow(self, episode: int):
         to_be_logged = dict()
