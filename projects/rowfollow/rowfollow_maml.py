@@ -43,7 +43,7 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
                                model=model,
                                device=env_config.device,
                                do_use_mlflow=env_config.do_use_mlflow)
-    trainer.train()
+    trainer.run_training()
 
 
 if __name__ == '__main__':

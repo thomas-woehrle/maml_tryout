@@ -4,14 +4,13 @@ from typing import Callable
 import numpy as np
 import mlflow
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch import autograd
 
-import maml_config
 import maml_api
-
-NamedParams = dict[str, torch.nn.parameter.Parameter]
-NamedBuffers = dict[str, torch.Tensor]
+import maml_config
+import maml_inner_optimizers
 
 
 def default_end_of_ep_fct(params, buffers: torch.tensor,
@@ -22,14 +21,14 @@ def default_end_of_ep_fct(params, buffers: torch.tensor,
     print('val_loss :', val_loss)
 
 
-class MamlTrainer:
+class MamlTrainer(nn.Module):
     def __init__(self, hparams: maml_config.MamlHyperParameters,
                  sample_task: Callable[[maml_api.Stage], maml_api.MamlTask], model: maml_api.MamlModel,
-                 device: torch.device,
-                 do_use_mlflow: bool = False,
+                 device: torch.device, do_use_mlflow: bool = False,
                  n_val_iters: int = 10,
                  log_val_loss_every_n_episodes: int = 100,
-                 log_model_every_n_episodes: int = 1000):
+                 log_model_every_n_episodes: int = 1000,
+                 *args, **kwargs):
         """
         Args:
             hparams: Hyperparameters relevant for MAML.
@@ -42,6 +41,7 @@ class MamlTrainer:
                                             First and last will always be logged. (Default: 100)
             log_model_every_n_episodes: Frequency of model logging. First and last will always be logged. (Default: 1000)
         """
+        super().__init__(*args, **kwargs)
         self.hparams: maml_config.MamlHyperParameters = hparams
         self.sample_task: Callable[[maml_api.Stage], maml_api.MamlTask] = sample_task
         self.model: maml_api.MamlModel = model
@@ -54,6 +54,11 @@ class MamlTrainer:
         self.multi_step_loss_n_episodes: int = int(hparams.n_episodes * 0.1) or 1
         # the first 30 percent of episodes will use first order updates
         self.first_order_updates_n_episodes: int = int(hparams.n_episodes * 0.3)
+        example_params, _ = self.model.get_state()
+        self.inner_optimizer = maml_inner_optimizers.LSLRGradientDescentLearningRule(
+            example_params=example_params, inner_steps=self.hparams.inner_steps, init_lr=self.hparams.alpha,
+            use_learnable_learning_rates=True, device=self.device
+        )
 
         self.current_episode: int = 0
 
@@ -80,31 +85,30 @@ class MamlTrainer:
             for i in range(len(loss_weights) - 1):
                 loss_weights[i] = np.maximum(loss_weights[i] - (self.current_episode * decay_rate),
                                              min_value_for_non_final_losses)
-            loss_weights[-1] = np.minimum(
-                loss_weights[-1] + (self.current_episode * (self.hparams.inner_steps - 1) * decay_rate),
-                1.0 - ((self.hparams.inner_steps - 1) * min_value_for_non_final_losses))
             loss_weights[-1] = 1 - loss_weights[0] * (len(loss_weights)-1)
 
         loss_weights = torch.Tensor(loss_weights).to(device=self.device)
         return loss_weights
 
     def inner_step(self, x_support: torch.Tensor, y_support: torch.Tensor,
-                   params: NamedParams, buffers: NamedBuffers, task: maml_api.MamlTask,
-                   stage: maml_api.Stage) -> NamedParams:
+                   params: maml_api.NamedParams, buffers: maml_api.NamedBuffers, task: maml_api.MamlTask,
+                   num_step: int, stage: maml_api.Stage) -> maml_api.NamedParams:
         # TODO add anil back
         y_hat = self.model.func_forward(x_support, params, buffers)
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
 
         mlflow.log_metric("second_order_true", int(self.current_episode > self.first_order_updates_n_episodes),
                           self.current_episode)
-        grads = autograd.grad(
-            train_loss, params.values(), create_graph=(stage == maml_api.Stage.TRAIN
-                                                       and self.current_episode > self.first_order_updates_n_episodes))
+        grads = autograd.grad(train_loss, params.values(),
+                              create_graph=(stage == maml_api.Stage.TRAIN
+                                            and self.current_episode > self.first_order_updates_n_episodes))
+        names_grads_dict = dict(zip(params.keys(), grads))
 
-        return {n: p - self.hparams.alpha *
-                       g for (n, p), g in zip(params.items(), grads)}
+        return self.inner_optimizer.update_params(params, names_grads_dict, num_step)
+        # return {n: p - self.hparams.alpha *
+        #               g for (n, p), g in zip(params.items(), grads)}
 
-    def meta_forward(self, params: NamedParams, buffers: NamedBuffers, stage: maml_api.Stage):
+    def meta_forward(self, params: maml_api.NamedParams, buffers: maml_api.NamedBuffers, stage: maml_api.Stage):
         """Does a meta forward pass
 
         It first samples a task, then finetunes the model parameters on its support set, then calculates a loss
@@ -121,7 +125,7 @@ class MamlTrainer:
         # i symbolizes the i-th step
         for i in range(self.hparams.inner_steps):
             # finetune params
-            params_i = self.inner_step(x_support, y_support, params_i, buffers, task, stage)
+            params_i = self.inner_step(x_support, y_support, params_i, buffers, task, i, stage)
 
             # calculate target loss using new params
             target_loss = task.calc_loss(self.model.func_forward(x_target, params_i, buffers), y_target,
@@ -131,8 +135,9 @@ class MamlTrainer:
 
         return loss
 
-    def train(self):
-        optimizer = optim.Adam(self.model.parameters(), lr=self.hparams.beta)
+    def run_training(self):
+        # self.parameters() also includes the per layer per step learning rates if they are learnable
+        optimizer = optim.Adam(self.parameters(), lr=self.hparams.beta)
         lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.hparams.n_episodes,
                                                          eta_min=self.hparams.min_beta)
         _, buffers = self.model.get_state()
@@ -154,6 +159,8 @@ class MamlTrainer:
             lr_scheduler.step()
 
             if self.do_use_mlflow:
+                # log learning rates
+                self.inner_optimizer.log_lrs(episode)
                 # log acc_loss
                 mlflow.log_metric("batch_loss", batch_loss.item(), step=episode)
 

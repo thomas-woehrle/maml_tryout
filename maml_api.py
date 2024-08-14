@@ -5,6 +5,10 @@ import torch
 import torch.nn as nn
 
 
+NamedParams = dict[str, torch.nn.parameter.Parameter]
+NamedBuffers = dict[str, torch.Tensor]
+
+
 class Stage(enum.Enum):
     """Represents the training stage of the MAML algorithm.
 
