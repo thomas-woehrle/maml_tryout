@@ -1,8 +1,8 @@
-import mlflow
 import torch.nn as nn
 import torch
 
 import maml_api
+import maml_logging
 
 
 # Adapted from: https://github.com/AntreasAntoniou/HowToTrainYourMAMLPytorch/blob/master/inner_loop_optimizers.py
@@ -43,7 +43,7 @@ class LSLRGradientDescentLearningRule(nn.Module):
             for n, p in params.items()
         }
 
-    def log_lrs(self, episode: int):
+    def log_lrs(self, episode: int, logger: maml_logging.Logger):
         for n, lrs in self.names_lrs_dict.items():
             for i in range(self.inner_steps):
-                mlflow.log_metric('step{}'.format(i) + n, lrs[i], episode)
+                logger.log_metric('step{}'.format(i) + n, lrs[i], episode)

@@ -11,6 +11,7 @@ from torch import autograd
 import maml_api
 import maml_config
 import maml_inner_optimizers
+import maml_logging
 
 
 def default_end_of_ep_fct(params, buffers: torch.tensor,
@@ -59,8 +60,8 @@ class MamlTrainer(nn.Module):
             example_params=example_params, inner_steps=self.hparams.inner_steps, init_lr=self.hparams.alpha,
             use_learnable_learning_rates=True, device=self.device
         )
-
         self.current_episode: int = 0
+        self.logger = maml_logging.Logger()
 
     def get_per_step_loss_importance_vector(self, stage: maml_api.Stage) -> torch.Tensor:
         # Adapted from: https://github.com/AntreasAntoniou/HowToTrainYourMAMLPytorch
@@ -97,8 +98,8 @@ class MamlTrainer(nn.Module):
         y_hat = self.model.func_forward(x_support, params, buffers)
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
 
-        mlflow.log_metric("second_order_true", int(self.current_episode > self.first_order_updates_n_episodes),
-                          self.current_episode)
+        self.logger.log_metric("second_order_true", int(self.current_episode > self.first_order_updates_n_episodes),
+                               self.current_episode)
         grads = autograd.grad(train_loss, params.values(),
                               create_graph=(stage == maml_api.Stage.TRAIN
                                             and self.current_episode > self.first_order_updates_n_episodes))
@@ -155,14 +156,14 @@ class MamlTrainer(nn.Module):
             optimizer.step()
 
             # log current lr then step
-            mlflow.log_metric("lr", lr_scheduler.get_last_lr()[0], episode)
+            self.logger.log_metric("lr", lr_scheduler.get_last_lr()[0], episode)
             lr_scheduler.step()
 
             if self.do_use_mlflow:
                 # log learning rates
-                self.inner_optimizer.log_lrs(episode)
+                self.inner_optimizer.log_lrs(episode, self.logger)
                 # log acc_loss
-                mlflow.log_metric("batch_loss", batch_loss.item(), step=episode)
+                self.logger.log_metric("batch_loss", batch_loss.item(), step=episode)
 
                 # log eval_loss under condition
                 if episode % self.log_val_loss_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:
@@ -170,13 +171,15 @@ class MamlTrainer(nn.Module):
                     # TODO take mean across multiple runs?
                     # TODO the val_loss shouldn't just be the meta_forward loss ?
                     val_loss = self.meta_forward(end_params, buffers, maml_api.Stage.VAL)
-                    mlflow.log_metric("val_loss", val_loss.item(), step=episode)
+                    self.logger.log_metric("val_loss", val_loss.item(), step=episode)
 
                 # log model under condition
                 if episode % self.log_model_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:
                     # TrainingStage passed to sample_task shouldn't play a role here
                     example_x = self.sample_task(maml_api.Stage.TRAIN).sample()[0].cpu().numpy()
                     mlflow.pytorch.log_model(copy.deepcopy(self.model).cpu(), f'models/ep{episode}', input_example=example_x)
+
+                self.logger.log_buffer_to_mlflow(episode)
 
             # '0' temporary. ideal: val_loss.item())
             default_end_of_ep_fct(params, buffers, episode, batch_loss.item(), 0)

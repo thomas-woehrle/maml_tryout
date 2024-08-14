@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Dict, Any
 
 import mlflow
@@ -20,3 +21,25 @@ def log_configuration(hparams: "maml_config.MamlHyperParameters", env_config: "m
     mlflow.log_dict(env_config, 'env_config.json')
     mlflow.log_params(other_config)
     mlflow.log_dict(other_config, 'other_config.json')
+
+
+@dataclass
+class Log:
+    key: str
+    value: float
+    step: int
+
+
+class Logger:
+    def __init__(self):
+        self.logs_buffer: dict[str, Log] = dict()
+
+    def log_metric(self, key: str, value: float, step: int):
+        self.logs_buffer['key'] = Log(key, value, step)
+
+    def log_buffer_to_mlflow(self, episode: int):
+        to_be_logged = dict()
+        for k, l in self.logs_buffer.items():
+            if l.step == episode:
+                to_be_logged[l.key] = l.value
+        mlflow.log_metrics(to_be_logged, episode)
