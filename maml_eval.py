@@ -1,26 +1,85 @@
-from typing import Callable
+import os
+from typing import Callable, Optional
 
+import mlflow
 import torch
 from torch import autograd
 
 import maml_api
 import maml_config
-import maml_logging
+
+
+class MlflowArtifactManager:
+    def __init__(self, run_id: str, episode: int, lib_directory: str = '~/Library/Application Support/torchmaml/runs',
+                 model_name: str = 'model', override_downloads: bool = False):
+        self.run_id: str = run_id
+        self.episode_str: str = 'ep{}'.format(episode)
+        self.model_name = model_name
+        self.lib_directory = lib_directory
+        os.makedirs(self.lib_directory, exist_ok=True)
+        self.check_and_download_artifacts(override_downloads)
+
+    def check_and_download_artifacts(self, override_downloads: bool):
+        # Download files if needed
+        if not os.path.exists(os.path.join(self.lib_directory, self.run_id)) or override_downloads:
+            os.makedirs(os.path.join(self.lib_directory, self.run_id))
+            self.download_artifact('hparams.json')
+        if not os.path.exists(os.path.join(self.lib_directory, self.run_id, self.episode_str)) or override_downloads:
+            os.makedirs(os.path.join(self.lib_directory, self.run_id, self.episode_str))
+            self.download_artifact(os.path.join(self.episode_str, 'inner_lrs.json'))
+            self.download_artifact(os.path.join(self.episode_str, 'inner_buffers.json'))
+
+    def download_artifact(self, artifact_path: str):
+        mlflow.artifacts.download_artifacts(run_id=self.run_id, artifact_path=artifact_path,
+                                            dst_path=os.path.join(self.lib_directory, self.run_id, artifact_path),
+                                            tracking_uri='databricks')
+
+    def download_model(self):
+        dst_path = os.path.join(self.lib_directory, self.run_id, self.model_name)
+        os.makedirs(dst_path, exist_ok=True)
+
+        model_uri = 'runs:/{}/{}/{}'.format(self.run_id, self.episode_str, self.model_name)
+
+        mlflow.pytorch.load_model(model_uri, dst_path)
+
+    def load_model(self) -> maml_api.MamlModel:
+        return mlflow.pytorch.load_model(os.path.join(self.lib_directory, self.run_id,
+                                                      self.episode_str, self.model_name))
+
+    def load_hparams(self) -> maml_config.MamlHyperParameters:
+        hparams_dict = mlflow.artifacts.load_dict(os.path.join(self.lib_directory, self.run_id, 'hparams.json'))
+        return maml_config.MamlHyperParameters(**hparams_dict)
+
+    def load_inner_lrs(self) -> dict[str, list[float]]:
+        # in the case of the lrs, they don't have to be transformed to tensors
+        return mlflow.artifacts.load_dict(os.path.join(self.lib_directory, self.run_id,
+                                                       self.episode_str, 'inner_lrs.json'))
+
+    def load_inner_buffers(self) -> dict[int, dict[str, torch.Tensor]]:
+        inner_buffers = mlflow.artifacts.load_dict(os.path.join(self.lib_directory, self.run_id,
+                                                                self.episode_str, 'inner_buffers.json'))
+        for i, named_buffers in inner_buffers.items():
+            for n, b in named_buffers.items():
+                inner_buffers[i][n] = torch.tensor(b)
+        return inner_buffers
 
 
 class MamlEvaluator:
-    def __init__(self, hparams: maml_config.MamlHyperParameters,
-                 sample_task: Callable[[maml_api.Stage], maml_api.MamlTask], model: maml_api.MamlModel,
-                 inner_lrs: dict[str, torch.Tensor], inner_buffers: dict[int, dict[str, torch.Tensor]],
-                 device: torch.device):
-        self.hparams: maml_config.MamlHyperParameters = hparams
-        self.sample_task: Callable[[maml_api.Stage], maml_api.MamlTask] = sample_task
-        self.model: maml_api.MamlModel = model
-        self.inner_lrs: dict[str, torch.Tensor] = inner_lrs
-        self.inner_buffers: dict[int, dict[str, torch.Tensor]] = inner_buffers
-        self.device: torch.device = device
+    def __init__(self, run_id: str, episode: int, sample_task: Callable[[maml_api.Stage], maml_api.MamlTask],
+                 hparams: Optional[maml_config.MamlHyperParameters] = None,
+                 lib_directory: str = '~/Library/Application Support/torchmaml/runs',
+                 model_name: str = 'model',
+                 override_downloads: bool = False
+                 ):
+        self.artifact_manager = MlflowArtifactManager(run_id, episode, lib_directory, model_name, override_downloads)
+
+        self.sample_task = sample_task
+        self.hparams = hparams or self.artifact_manager.load_hparams()
+        self.model = self.artifact_manager.load_model()
+        self.inner_lrs = self.artifact_manager.load_inner_lrs()
+        self.inner_buffers = self.artifact_manager.load_inner_buffers()
+
         self.already_finetuned: bool = False
-        self.logger = maml_logging.Logger()
 
     def inner_step(self, x_support: torch.Tensor, y_support: torch.Tensor,
                    params: maml_api.NamedParams, task: maml_api.MamlTask,
@@ -36,7 +95,7 @@ class MamlEvaluator:
         return {n: p - self.inner_lrs[n.replace('.', '-')][num_step] *
                        g for (n, p), g in zip(params.items(), grads)}
 
-    def train(self):
+    def finetune(self):
         if self.already_finetuned:
             print('WARNING: Already finetuned...')
             return False
