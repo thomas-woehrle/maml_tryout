@@ -38,11 +38,11 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
     model = rowfollow_model.RowfollowModel()
     model.to(env_config.device)
 
-    trainer = maml.MamlTrainer(hparams=maml_hparams,
-                               sample_task=sample_task,
-                               model=model,
-                               device=env_config.device,
-                               do_use_mlflow=env_config.do_use_mlflow)
+    trainer = maml_train.MamlTrainer(hparams=maml_hparams,
+                                     sample_task=sample_task,
+                                     model=model,
+                                     device=env_config.device,
+                                     do_use_mlflow=env_config.do_use_mlflow)
     trainer.run_training()
 
 

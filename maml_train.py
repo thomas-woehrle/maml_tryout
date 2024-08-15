@@ -14,14 +14,6 @@ import maml_inner_optimizers
 import maml_logging
 
 
-def default_end_of_ep_fct(params, buffers: torch.tensor,
-                          episode: int, acc_loss: float, val_loss: float):
-    # TODO offer possibility for custom end_of_ep_fct
-    """Default function used at the end of an episode. See usage below."""
-    print('acc_loss :', acc_loss)
-    print('val_loss :', val_loss)
-
-
 class MamlTrainer(nn.Module):
     def __init__(self, hparams: maml_config.MamlHyperParameters,
                  sample_task: Callable[[maml_api.Stage], maml_api.MamlTask], model: maml_api.MamlModel,
@@ -60,7 +52,7 @@ class MamlTrainer(nn.Module):
             example_params=example_params, inner_steps=self.hparams.inner_steps, init_lr=self.hparams.alpha,
             use_learnable_learning_rates=True, device=self.device
         )
-        self.inner_buffers = self.initialize_buffers(example_buffers)
+        self.inner_buffers = self.initialize_inner_buffers(example_buffers)
         self.current_episode: int = 0
         self.logger = maml_logging.Logger()
 
@@ -69,7 +61,11 @@ class MamlTrainer(nn.Module):
             for n, b in self.inner_buffers[i].items():
                 self.logger.log_metric('step{}--'.format(i) + n, b.sum().item(), episode)
 
-    def initialize_buffers(self, example_buffers: maml_api.NamedBuffers) -> dict[int, dict[str, torch.Tensor]]:
+        _, meta_buffers = self.model.get_state()
+        for n, b in meta_buffers.items():
+            self.logger.log_metric('metabuffer--' + n, b.sum().item(), episode)
+
+    def initialize_inner_buffers(self, example_buffers: maml_api.NamedBuffers) -> dict[int, dict[str, torch.Tensor]]:
         zeroed_buffers = dict()
         for n, b in example_buffers.items():
             zeroed_buffers[n] = torch.zeros_like(b, dtype=b.dtype, device=b.device)
@@ -129,13 +125,14 @@ class MamlTrainer(nn.Module):
 
         It first samples a task, then finetunes the model parameters on its support set, then calculates a loss
         using its target set. This loss has to be backpropagateable if the stage is TRAIN.
+
+        The buffers will only be updated during the pass used for calculation of the target loss, ie after finetuning
+        has happened. This is a feature not a bug, since they represent the distribution of the data passing through a
+        model after finetuning has happened. These buffers can be used for evaluating later on.
         """
-        # TODO the buffers are used only during target loss calculation.
-        #  This is not a problem, but they should be saved as attribute of the class instead?
-        #  In any case, they should be saved, as should the inner_buffers
         task = self.sample_task(stage)
-        x_support, y_support = task.sample()
-        x_target, y_target = task.sample()
+        x_support, y_support = task.sample(maml_api.SetToSetType.SUPPORT)
+        x_target, y_target = task.sample(maml_api.SetToSetType.TARGET)
 
         per_step_loss_importance_vector = self.get_per_step_loss_importance_vector(stage)
         params_i = {n: p for n, p in params.items()}
@@ -158,14 +155,12 @@ class MamlTrainer(nn.Module):
         # self.parameters() also includes the per layer per step learning rates if they are learnable
         optimizer = optim.Adam(self.parameters(), lr=self.hparams.beta)
         lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.hparams.n_episodes,
-                                                         eta_min=self.hparams.min_beta)
-        _, buffers = self.model.get_state()
-
+                                                            eta_min=self.hparams.min_beta)
         for episode in range(self.hparams.n_episodes):
             self.log_buffers(episode)
             self.current_episode = episode
             optimizer.zero_grad()
-            params, _ = self.model.get_state()
+            params, buffers = self.model.get_state()
 
             batch_loss = torch.tensor(0.0, device=self.device)
             for i in range(self.hparams.meta_batch_size):
@@ -187,18 +182,23 @@ class MamlTrainer(nn.Module):
                     end_params, _ = self.model.get_state()
                     # TODO take mean across multiple runs?
                     # TODO the val_loss shouldn't just be the meta_forward loss ?
+                    # TODO meta_buffers shouldn't be updated in this case inside meta_forward,
+                    #  but does not matter to much for now
                     val_loss = self.meta_forward(end_params, buffers, maml_api.Stage.VAL)
                     self.logger.log_metric("val_loss", val_loss.item(), step=episode)
 
                 # log model under condition
                 if episode % self.log_model_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:
-                    # TrainingStage passed to sample_task shouldn't play a role here
-                    example_x = self.sample_task(maml_api.Stage.TRAIN).sample()[0].cpu().numpy()
-                    mlflow.pytorch.log_model(copy.deepcopy(self.model).cpu(), f'models/ep{episode}', input_example=example_x)
+                    # TrainingStage and SetToSetType passed to sample_task shouldn't play a role here
+                    example_x = (self.sample_task(maml_api.Stage.TRAIN).sample(maml_api.SetToSetType.SUPPORT)[0].
+                                 cpu().numpy())
+                    mlflow.pytorch.log_model(copy.deepcopy(self.model).cpu(), f'ep{episode}/model',
+                                             input_example=example_x)
+                    self.logger.log_dict(self.inner_buffers, f'ep{episode}/inner_buffers.json')
+                    #  {...} to turn nn.ParameterDict into normal dict
+                    self.logger.log_dict({n: t for n, t in self.inner_optimizer.names_lrs_dict.items()},
+                                         f'ep{episode}/inner_lrs.json')
 
-                self.logger.log_buffer_to_mlflow(episode)
+                self.logger.log_metrics_buffer_to_mlflow(episode)
 
-            # '0' temporary. ideal: val_loss.item())
-            default_end_of_ep_fct(params, buffers, episode, batch_loss.item(), 0)
-
-        # TODO put buffers back into model?
+            print('batch_loss:', batch_loss.item())

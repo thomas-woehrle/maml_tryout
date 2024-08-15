@@ -117,6 +117,7 @@ class MamlEvaluator:
         """
         Runs one inference on the task at hand and returns y_hat and the loss
         """
+        # .eval() ?
         if not self.already_finetuned:
             print('WARNING: Not finetuned yet')
         task = self.sample_task(maml_api.Stage.VAL)

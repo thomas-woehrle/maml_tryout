@@ -74,7 +74,7 @@ class RowfollowTask(maml_api.MamlTask):
         self.device = device
         self.sigma = sigma
 
-    def sample(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, sts_type: maml_api.SetToSetType) -> tuple[torch.Tensor, torch.Tensor]:
         samples = self.labels.sample(self.k, random_state=self.seed, replace=False)
         x = []
         y = []
@@ -120,5 +120,3 @@ class RowfollowTask(maml_api.MamlTask):
             return (self._loss_fct(y_hat[:, 0], y[:, 0])
                     + self._loss_fct(y_hat[:, 1], y[:, 1])
                     + self._loss_fct(y_hat[:, 2], y[:, 2]))
-
-

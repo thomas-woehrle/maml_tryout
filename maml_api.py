@@ -4,7 +4,6 @@ from typing import Protocol
 import torch
 import torch.nn as nn
 
-
 NamedParams = dict[str, torch.nn.parameter.Parameter]
 NamedBuffers = dict[str, torch.Tensor]
 
@@ -64,7 +63,7 @@ class MamlTask(Protocol):
     """Protocol representing a task as it is used in MAML.
     """
 
-    def sample(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, sts_type: SetToSetType) -> tuple[torch.Tensor, torch.Tensor]:
         """Samples from the task. 
 
         Returns:
