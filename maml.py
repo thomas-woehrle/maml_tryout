@@ -55,13 +55,28 @@ class MamlTrainer(nn.Module):
         self.multi_step_loss_n_episodes: int = int(hparams.n_episodes * 0.1) or 1
         # the first 30 percent of episodes will use first order updates
         self.first_order_updates_n_episodes: int = int(hparams.n_episodes * 0.3)
-        example_params, _ = self.model.get_state()
+        example_params, example_buffers = self.model.get_state()
         self.inner_optimizer = maml_inner_optimizers.LSLRGradientDescentLearningRule(
             example_params=example_params, inner_steps=self.hparams.inner_steps, init_lr=self.hparams.alpha,
             use_learnable_learning_rates=True, device=self.device
         )
+        self.inner_buffers = self.initialize_buffers(example_buffers)
         self.current_episode: int = 0
         self.logger = maml_logging.Logger()
+
+    def log_buffers(self, episode: int):
+        for i in range(self.hparams.inner_steps):
+            for n, b in self.inner_buffers[i].items():
+                self.logger.log_metric('step{}--'.format(i) + n, b.sum().item(), episode)
+
+    def initialize_buffers(self, example_buffers: maml_api.NamedBuffers) -> dict[int, dict[str, torch.Tensor]]:
+        zeroed_buffers = dict()
+        for n, b in example_buffers.items():
+            zeroed_buffers[n] = torch.zeros_like(b, dtype=b.dtype, device=b.device)
+
+        # create a copy of the zeroed_buffers dict for each inner step
+        return {i: {n: b.clone().detach() for n, b in zeroed_buffers.items()}
+                for i in range(self.hparams.inner_steps)}
 
     def get_per_step_loss_importance_vector(self, stage: maml_api.Stage) -> torch.Tensor:
         # Adapted from: https://github.com/AntreasAntoniou/HowToTrainYourMAMLPytorch
@@ -92,10 +107,10 @@ class MamlTrainer(nn.Module):
         return loss_weights
 
     def inner_step(self, x_support: torch.Tensor, y_support: torch.Tensor,
-                   params: maml_api.NamedParams, buffers: maml_api.NamedBuffers, task: maml_api.MamlTask,
+                   params: maml_api.NamedParams, task: maml_api.MamlTask,
                    num_step: int, stage: maml_api.Stage) -> maml_api.NamedParams:
         # TODO add anil back
-        y_hat = self.model.func_forward(x_support, params, buffers)
+        y_hat = self.model.func_forward(x_support, params, self.inner_buffers[num_step])
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
 
         self.logger.log_metric("second_order_true", int(self.current_episode > self.first_order_updates_n_episodes),
@@ -115,6 +130,9 @@ class MamlTrainer(nn.Module):
         It first samples a task, then finetunes the model parameters on its support set, then calculates a loss
         using its target set. This loss has to be backpropagateable if the stage is TRAIN.
         """
+        # TODO the buffers are used only during target loss calculation.
+        #  This is not a problem, but they should be saved as attribute of the class instead?
+        #  In any case, they should be saved, as should the inner_buffers
         task = self.sample_task(stage)
         x_support, y_support = task.sample()
         x_target, y_target = task.sample()
@@ -126,7 +144,7 @@ class MamlTrainer(nn.Module):
         # i symbolizes the i-th step
         for i in range(self.hparams.inner_steps):
             # finetune params
-            params_i = self.inner_step(x_support, y_support, params_i, buffers, task, i, stage)
+            params_i = self.inner_step(x_support, y_support, params_i, task, i, stage)
 
             # calculate target loss using new params
             target_loss = task.calc_loss(self.model.func_forward(x_target, params_i, buffers), y_target,
@@ -144,6 +162,7 @@ class MamlTrainer(nn.Module):
         _, buffers = self.model.get_state()
 
         for episode in range(self.hparams.n_episodes):
+            self.log_buffers(episode)
             self.current_episode = episode
             optimizer.zero_grad()
             params, _ = self.model.get_state()
@@ -160,8 +179,6 @@ class MamlTrainer(nn.Module):
             lr_scheduler.step()
 
             if self.do_use_mlflow:
-                # log learning rates
-                self.inner_optimizer.log_lrs(episode, self.logger)
                 # log acc_loss
                 self.logger.log_metric("batch_loss", batch_loss.item(), step=episode)
 
