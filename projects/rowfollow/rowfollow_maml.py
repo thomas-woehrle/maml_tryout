@@ -3,7 +3,7 @@ from typing import Any
 
 import mlflow
 
-import maml
+import maml_train
 import maml_api
 import maml_config
 

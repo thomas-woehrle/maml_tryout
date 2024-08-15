@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from maml import maml_api
+from maml_train import maml_api
 
 
 class OmniglotModel(maml_api.MamlModel):

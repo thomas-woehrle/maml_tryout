@@ -3,7 +3,7 @@ from typing import List
 
 import mlflow
 
-import maml
+import maml_train
 import maml_config
 import omniglot_model
 import omniglot_task

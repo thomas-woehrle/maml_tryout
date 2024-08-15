@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from rf_utils import viz, vision
 
-import maml
+import maml_train
 import rowfollow_utils as utils
 from projects.omniglot import omniglot_task, omniglot_model
 
