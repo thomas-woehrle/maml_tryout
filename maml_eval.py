@@ -28,14 +28,15 @@ class MlflowArtifactManager:
             os.makedirs(os.path.join(self.lib_directory, self.run_id, self.episode_str))
             self.download_artifact(os.path.join(self.episode_str, 'inner_lrs.json'))
             self.download_artifact(os.path.join(self.episode_str, 'inner_buffers.json'))
+            self.download_model()
 
     def download_artifact(self, artifact_path: str):
         mlflow.artifacts.download_artifacts(run_id=self.run_id, artifact_path=artifact_path,
-                                            dst_path=os.path.join(self.lib_directory, self.run_id, artifact_path),
+                                            dst_path=os.path.join(self.lib_directory, self.run_id),
                                             tracking_uri='databricks')
 
     def download_model(self):
-        dst_path = os.path.join(self.lib_directory, self.run_id, self.model_name)
+        dst_path = os.path.join(self.lib_directory, self.run_id, self.episode_str)
         os.makedirs(dst_path, exist_ok=True)
 
         model_uri = 'runs:/{}/{}/{}'.format(self.run_id, self.episode_str, self.model_name)
@@ -55,7 +56,7 @@ class MlflowArtifactManager:
         return mlflow.artifacts.load_dict(os.path.join(self.lib_directory, self.run_id,
                                                        self.episode_str, 'inner_lrs.json'))
 
-    def load_inner_buffers(self) -> dict[int, dict[str, torch.Tensor]]:
+    def load_inner_buffers(self) -> dict[str, dict[str, torch.Tensor]]:
         inner_buffers = mlflow.artifacts.load_dict(os.path.join(self.lib_directory, self.run_id,
                                                                 self.episode_str, 'inner_buffers.json'))
         for i, named_buffers in inner_buffers.items():
@@ -85,8 +86,11 @@ class MamlEvaluator:
                    params: maml_api.NamedParams, task: maml_api.MamlTask,
                    num_step: int, stage: maml_api.Stage) -> maml_api.NamedParams:
         # TODO add anil back
-        y_hat = self.model.func_forward(x_support, params, self.inner_buffers[num_step])
+        # str(num_step), because keys are strings like "0" through saving in json
+        # and it would be useless computation to transform to int
+        y_hat = self.model.func_forward(x_support, params, self.inner_buffers[str(num_step)])
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
+        print('train_loss at step {}: {}'.format(num_step, train_loss.item()))
 
         grads = autograd.grad(train_loss, params.values(),
                               create_graph=False)
@@ -99,9 +103,10 @@ class MamlEvaluator:
         if self.already_finetuned:
             print('WARNING: Already finetuned...')
             return False
+        print('Finetuning...')
         params, _ = self.model.get_state()
         task = self.sample_task(maml_api.Stage.VAL)
-        x_support, y_support = task.sample()
+        x_support, y_support = task.sample(maml_api.SetToSetType.SUPPORT)
 
         params_i = {n: p for n, p in params.items()}
         # i symbolizes the i-th step
@@ -110,18 +115,23 @@ class MamlEvaluator:
             params_i = self.inner_step(x_support, y_support, params_i, task, i, maml_api.Stage.VAL)
 
         self.already_finetuned = True
-        # TODO load parameters into Model
+        self.model.load_state_dict(params_i, strict=False)
+        print('Finished finetuning. \n')
         return True
 
-    def predict(self):
+    def predict(self, seed: Optional[int] = None) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Runs one inference on the task at hand and returns y_hat and the loss
+
+        Returns:
+            A tuple of 1. the raw prediction ie y_hat and 2. the calculated target loss
         """
         # .eval() ?
         if not self.already_finetuned:
             print('WARNING: Not finetuned yet')
-        task = self.sample_task(maml_api.Stage.VAL)
-        x_target, y_target = task.sample()
+        kwargs = {} if seed is None else {'seed': seed}
+        task = self.sample_task(maml_api.Stage.VAL, **kwargs)
+        x_target, y_target = task.sample(maml_api.SetToSetType.TARGET)
 
         y_hat = self.model(x_target)
 

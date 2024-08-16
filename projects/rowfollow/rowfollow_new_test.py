@@ -93,7 +93,7 @@ def test(run_id: str, episode: int, cf_and_bag: str, cam_side: str = 'left_cam',
     print(train_path)
     model = load_local_model(run_id, episode)
     task = rowfollow_task.RowfollowTask(train_path, hparams.k, torch.device('cpu'), other_config['sigma'],
-                                        cam_side=train_cam_side, seed=0)
+                                        support_cam_side=train_cam_side, seed=0)
     train_model(model, task, hparams.alpha, 3)
 
     input_path = os.path.join(bag_path, cam_side)
