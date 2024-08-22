@@ -57,8 +57,8 @@ def get_train_and_test_bags(directory, exclude_first_x, exclude_last_y):
     days = glob.glob(os.path.join(directory, '*/'))
     days = sorted(days)
 
-    train_days = days[exclude_first_x:-exclude_last_y]
-    test_days = days[:exclude_first_x] + days[-exclude_last_y:]
+    train_days = days[exclude_first_x:-exclude_last_y if exclude_last_y > 0 else None]
+    test_days = days[:exclude_first_x] + days[-exclude_last_y:] if exclude_last_y > 0 else []
 
     train_days_bags = []
     test_days_bags = []
