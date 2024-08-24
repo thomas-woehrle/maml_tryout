@@ -86,11 +86,12 @@ class MamlTrainer(nn.Module):
         Returns:
             The loss importance vector.
         """
-        # If Val stage, then only the last step loss is important TODO is this actually the case?
-        if stage == maml_api.Stage.VAL:
+        # If Val stage or msl shouldn't be used, then only the last step loss is important
+        if not self.hparams.use_msl or stage == maml_api.Stage.VAL:
             loss_weights = np.zeros(self.hparams.inner_steps, dtype=np.float32)
             loss_weights[-1] = 1.0
         else:
+            # TODO currently steps 0 to N - 2 (second to last) have the same importance -> should this be the case?
             loss_weights = np.ones(self.hparams.inner_steps, dtype=np.float32) / self.hparams.inner_steps
             decay_rate = 1.0 / self.hparams.inner_steps / self.multi_step_loss_n_episodes
             min_value_for_non_final_losses = 0.03 / self.hparams.inner_steps

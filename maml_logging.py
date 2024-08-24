@@ -8,7 +8,7 @@ import torch
 import maml_config
 
 
-def log_configuration(hparams: "maml_config.MamlHyperParameters", env_config: "maml_config.EnvConfig",
+def log_configuration(hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig,
                       other_config: dict[str, Any]):
     """Logs the hparams and configuration.
 
