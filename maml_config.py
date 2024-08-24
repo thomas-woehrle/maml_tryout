@@ -24,6 +24,7 @@ class MamlHyperParameters():
         use_msl: Whether to use Multi-Step Loss Optimization (MSL).
         use_ca: Whether to use Cosine Annealing of Meta-Optimizer Learning Rate (CA)
         use_da: Whether to use Derivative-Order Annealing (DA)
+        use_lslr: Whether to learn Per-Layer Per-Step Learning Rates (LSLR)
     """
     n_episodes: int = 10_000
     meta_batch_size: int = 32
@@ -36,6 +37,7 @@ class MamlHyperParameters():
     use_msl: bool = True
     use_ca: bool = True
     use_da: bool = True
+    use_lslr: bool = True
 
 
 @dataclass

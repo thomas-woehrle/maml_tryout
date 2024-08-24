@@ -52,11 +52,13 @@ class MamlTrainer(nn.Module):
         self.first_order_updates_n_episodes: int = int(hparams.n_episodes * 0.3)
 
         example_params, example_buffers = self.model.get_state()
+        # inner_optimizer is created in any case, but only used when hparams.use_lslr is True
         self.inner_optimizer = maml_inner_optimizers.LSLRGradientDescentLearningRule(
             example_params=example_params, inner_steps=self.hparams.inner_steps, init_lr=self.hparams.alpha,
             use_learnable_learning_rates=True, device=self.device
         )
         self.inner_buffers = self.initialize_inner_buffers(example_buffers)
+
         self.current_episode: int = 0
         self.logger = maml_logging.Logger()
 
@@ -121,11 +123,14 @@ class MamlTrainer(nn.Module):
 
         grads = autograd.grad(train_loss, params.values(),
                               create_graph=use_second_order)
-        names_grads_dict = dict(zip(params.keys(), grads))
 
-        return self.inner_optimizer.update_params(params, names_grads_dict, num_step)
-        # return {n: p - self.hparams.alpha *
-        #               g for (n, p), g in zip(params.items(), grads)}
+        # update params
+        if self.hparams.use_lslr:
+            names_grads_dict = dict(zip(params.keys(), grads))
+            return self.inner_optimizer.update_params(params, names_grads_dict, num_step)
+        else:
+            return {n: p - self.hparams.alpha *
+                           g for (n, p), g in zip(params.items(), grads)}
 
     def meta_forward(self, params: maml_api.NamedParams, buffers: maml_api.NamedBuffers, stage: maml_api.Stage):
         """Does a meta forward pass
@@ -203,6 +208,7 @@ class MamlTrainer(nn.Module):
                                  cpu().numpy())
                     mlflow.pytorch.log_model(copy.deepcopy(self.model).cpu(), f'ep{episode}/model',
                                              input_example=example_x)
+                    # TODO should this be logged even if hparams.use_bnrs and/or hparams.use_lslr is false?
                     self.logger.log_dict(self.inner_buffers, f'ep{episode}/inner_buffers.json')
                     #  {...} to turn nn.ParameterDict into normal dict
                     self.logger.log_dict({n: t for n, t in self.inner_optimizer.names_lrs_dict.items()},
