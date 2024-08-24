@@ -23,6 +23,7 @@ class MamlHyperParameters():
         use_anil: Indicates whether ANIL should be used. Defaults to False.
         use_msl: Whether to use Multi-Step Loss Optimization (MSL).
         use_ca: Whether to use Cosine Annealing of Meta-Optimizer Learning Rate (CA)
+        use_da: Whether to use Derivative-Order Annealing (DA)
     """
     n_episodes: int = 10_000
     meta_batch_size: int = 32
@@ -34,6 +35,7 @@ class MamlHyperParameters():
     use_anil: bool = False
     use_msl: bool = True
     use_ca: bool = True
+    use_da: bool = True
 
 
 @dataclass
