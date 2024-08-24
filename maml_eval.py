@@ -31,6 +31,7 @@ class MlflowArtifactManager:
             self.download_model()
 
     def download_artifact(self, artifact_path: str):
+        print(f'Downloading artifact {artifact_path}')
         mlflow.artifacts.download_artifacts(run_id=self.run_id, artifact_path=artifact_path,
                                             dst_path=os.path.join(self.lib_directory, self.run_id),
                                             tracking_uri='databricks')
@@ -41,6 +42,7 @@ class MlflowArtifactManager:
 
         model_uri = 'runs:/{}/{}/{}'.format(self.run_id, self.episode_str, self.model_name)
 
+        print(f'Downloading model from {model_uri}')
         mlflow.pytorch.load_model(model_uri, dst_path)
 
     def load_model(self) -> maml_api.MamlModel:
@@ -68,9 +70,9 @@ class MlflowArtifactManager:
 class MamlEvaluator:
     def __init__(self, run_id: str, episode: int, sample_task: Callable[[maml_api.Stage], maml_api.MamlTask],
                  hparams: Optional[maml_config.MamlHyperParameters] = None,
-                 lib_directory: str = '~/Library/Application Support/torchmaml/runs',
+                 lib_directory: str = '~/Library/Application Support/torchmaml/runs',  # TODO use better default path
                  model_name: str = 'model',
-                 override_downloads: bool = False
+                 override_downloads: bool = False,
                  ):
         self.artifact_manager = MlflowArtifactManager(run_id, episode, lib_directory, model_name, override_downloads)
 
@@ -88,7 +90,8 @@ class MamlEvaluator:
         # TODO add anil back
         # str(num_step), because keys are strings like "0" through saving in json
         # and it would be useless computation to transform to int
-        y_hat = self.model.func_forward(x_support, params, self.inner_buffers[str(num_step)])
+        eff_num_step = min(num_step, len(self.inner_buffers.keys()) - 1)
+        y_hat = self.model.func_forward(x_support, params, self.inner_buffers[str(eff_num_step)])
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
         print('train_loss at step {}: {}'.format(num_step, train_loss.item()))
 
@@ -96,7 +99,8 @@ class MamlEvaluator:
                               create_graph=False)
 
         # return self.inner_optimizer.update_params(params, names_grads_dict, num_step)
-        return {n: p - self.inner_lrs[n.replace('.', '-')][num_step] *
+        factor = 0.5 if num_step > eff_num_step else 1  # TODO evaluate if this actually brings an improvement
+        return {n: p - factor * self.inner_lrs[n.replace('.', '-')][eff_num_step] *
                        g for (n, p), g in zip(params.items(), grads)}
 
     def finetune(self):
