@@ -155,8 +155,9 @@ class MamlTrainer(nn.Module):
     def run_training(self):
         # self.parameters() also includes the per layer per step learning rates if they are learnable
         optimizer = optim.Adam(self.parameters(), lr=self.hparams.beta)
-        lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.hparams.n_episodes,
-                                                            eta_min=self.hparams.min_beta)
+        if self.hparams.use_ca:
+            lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.hparams.n_episodes,
+                                                                eta_min=self.hparams.min_beta)
         for episode in range(self.hparams.n_episodes):
             self.log_buffers(episode)
             self.current_episode = episode
@@ -171,8 +172,9 @@ class MamlTrainer(nn.Module):
             optimizer.step()
 
             # log current lr then step
-            self.logger.log_metric("lr", lr_scheduler.get_last_lr()[0], episode)
-            lr_scheduler.step()
+            if self.hparams.use_ca:
+                self.logger.log_metric("lr", lr_scheduler.get_last_lr()[0], episode)
+                lr_scheduler.step()
 
             if self.do_use_mlflow:
                 # log acc_loss

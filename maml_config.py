@@ -21,6 +21,8 @@ class MamlHyperParameters():
         alpha: Inner learning rate. Defaults to 0.4.
         beta: Outer learning rate. Defaults to 0.001.
         use_anil: Indicates whether ANIL should be used. Defaults to False.
+        use_msl: Whether to use Multi-Step Loss Optimization (MSL).
+        use_ca: Whether to use Cosine Annealing of Meta-Optimizer Learning Rate (CA)
     """
     n_episodes: int = 10_000
     meta_batch_size: int = 32
@@ -31,6 +33,7 @@ class MamlHyperParameters():
     min_beta: float = 0.00001
     use_anil: bool = False
     use_msl: bool = True
+    use_ca: bool = True
 
 
 @dataclass
