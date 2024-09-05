@@ -28,31 +28,25 @@ def get_bag_path(bag_path_key: str):
 
 runs = {
     "only_msl_1": "f0990d091ae446108776ec818bb14f46",
-    "only_msl_2": "59d7d133156d450895bd0243aeab2937"
+    "only_msl_2": "59d7d133156d450895bd0243aeab2937",
+    "only_early_1": "af946f76673142368f2414f00259e51e"
 }
 
 
-run_id = runs['only_msl_1']
-episode = 19999
+run_id = runs["only_early_1"]
+episode = 9999
 do_visual_test = False
+inner_steps = 6
+use_brns = True
+use_lslr = True
 
-# support_bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield_representative_pictures/20220603_cornfield/ts_2022_06_03_02h57m53s'
-# support_cam_side = 'left_cam'
-# target_bag_path = '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/ts_2022_06_03_02h57m53s'
-# target_cam_side = 'both'
-# visualize_bag_path = target_bag_path
-# visualize_bag_path = '/Users/tomwoehrle/Downloads/front_left_cam'
-# visualize_cam_side = 'left_cam'
 
-support_bag_path = get_bag_path("0603_1")
+support_bag_path = get_bag_path("1006_1")
 support_cam_side = 'left_cam'
 target_bag_path = support_bag_path
 target_cam_side = support_cam_side
 visualize_bag_path = target_bag_path
 visualize_cam_side = 'left_cam'
-
-
-hparams = maml_config.MamlHyperParameters(inner_steps=6)
 
 
 def sample_task(stage: maml_api.Stage, seed: int = 0):
@@ -64,16 +58,21 @@ def sample_task(stage: maml_api.Stage, seed: int = 0):
 
 evaluator = maml_eval.MamlEvaluator(run_id, episode, sample_task,
                                     lib_directory='/Users/tomwoehrle/Documents/research_assistance/artifact_manager',
-                                    hparams=hparams)
+                                    inner_steps=inner_steps,
+                                    hparams=maml_config.MamlHyperParameters(
+                                        use_bnrs=use_brns, use_lslr=use_lslr,
+                                    ))
 
 evaluator.finetune()
 
+"""
 use_traditional_model = False
 ckpt = torch.load('/Users/tomwoehrle/Documents/research_assistance/supervised_train/row-follow-epoch=11-val_loss=0.000404.ckpt')
 traditional_model = RowfollowModel()
 traditional_model.load_state_dict(ckpt['state_dict'])
 traditional_model.eval()
 # evaluator.model = traditional_model
+"""
 
 if do_visual_test:
     input_path = os.path.join(visualize_bag_path, visualize_cam_side)
@@ -86,10 +85,10 @@ if do_visual_test:
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         data = torch.from_numpy(data).unsqueeze(0)
 
-        if use_traditional_model:
-            y_hat = traditional_model(data)
-        else:
-            y_hat = evaluator.model(data)
+        #if use_traditional_model:
+        #    y_hat = traditional_model(data)
+        #else:
+        y_hat = evaluator.model(data)
 
         img_with_lines = viz.img_with_lines_from_pred(img, y_hat)
         cv2.imshow('', img_with_lines)

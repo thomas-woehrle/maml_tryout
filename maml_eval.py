@@ -10,10 +10,13 @@ import maml_config
 
 
 class MlflowArtifactManager:
-    def __init__(self, run_id: str, episode: int, lib_directory: str = '~/Library/Application Support/torchmaml/runs',
+    def __init__(self, run_id: str, episode: int,  download_lrs: bool, download_buffers: bool,
+                 lib_directory: str = '~/Library/Application Support/torchmaml/runs',
                  model_name: str = 'model', override_downloads: bool = False):
         self.run_id: str = run_id
         self.episode_str: str = 'ep{}'.format(episode)
+        self.download_lrs: bool = download_lrs
+        self.download_buffers: bool = download_buffers
         self.model_name = model_name
         self.lib_directory = lib_directory
         os.makedirs(self.lib_directory, exist_ok=True)
@@ -26,8 +29,10 @@ class MlflowArtifactManager:
             self.download_artifact('hparams.json')
         if not os.path.exists(os.path.join(self.lib_directory, self.run_id, self.episode_str)) or override_downloads:
             os.makedirs(os.path.join(self.lib_directory, self.run_id, self.episode_str))
-            self.download_artifact(os.path.join(self.episode_str, 'inner_lrs.json'))
-            self.download_artifact(os.path.join(self.episode_str, 'inner_buffers.json'))
+            if self.download_lrs:
+                self.download_artifact(os.path.join(self.episode_str, 'inner_lrs.json'))
+            if self.download_buffers:
+                self.download_artifact(os.path.join(self.episode_str, 'inner_buffers.json'))
             self.download_model()
 
     def download_artifact(self, artifact_path: str):
@@ -40,10 +45,16 @@ class MlflowArtifactManager:
         dst_path = os.path.join(self.lib_directory, self.run_id, self.episode_str)
         os.makedirs(dst_path, exist_ok=True)
 
-        model_uri = 'runs:/{}/{}/{}'.format(self.run_id, self.episode_str, self.model_name)
+        try:
+            model_uri = 'runs:/{}/{}/{}'.format(self.run_id, self.episode_str, self.model_name)
 
-        print(f'Downloading model from {model_uri}')
-        mlflow.pytorch.load_model(model_uri, dst_path)
+            print(f'Downloading model from {model_uri}')
+            mlflow.pytorch.load_model(model_uri, dst_path)
+        except mlflow.exceptions.MlflowException as e:
+            print(f"MLflow error: {e.error_code}. The model probably didn't exist under the given path. ")
+            model_uri = 'runs:/{}/{}/{}'.format(self.run_id, 'models', self.episode_str)
+            print(f'Downloading model from {model_uri}')
+            mlflow.pytorch.load_model(model_uri, dst_path)
 
     def load_model(self) -> maml_api.MamlModel:
         return mlflow.pytorch.load_model(os.path.join(self.lib_directory, self.run_id,
@@ -70,17 +81,22 @@ class MlflowArtifactManager:
 class MamlEvaluator:
     def __init__(self, run_id: str, episode: int, sample_task: Callable[[maml_api.Stage], maml_api.MamlTask],
                  hparams: Optional[maml_config.MamlHyperParameters] = None,
+                 inner_steps: Optional[int] = None,
                  lib_directory: str = '~/Library/Application Support/torchmaml/runs',  # TODO use better default path
                  model_name: str = 'model',
                  override_downloads: bool = False,
                  ):
-        self.artifact_manager = MlflowArtifactManager(run_id, episode, lib_directory, model_name, override_downloads)
+        self.artifact_manager = MlflowArtifactManager(run_id, episode, hparams.use_lslr, hparams.use_bnrs,
+                                                      lib_directory, model_name, override_downloads)
 
         self.sample_task = sample_task
         self.hparams = hparams or self.artifact_manager.load_hparams()
+        if inner_steps is not None:
+            self.hparams.inner_steps = inner_steps
+
         self.model = self.artifact_manager.load_model()
-        self.inner_lrs = self.artifact_manager.load_inner_lrs()
-        self.inner_buffers = self.artifact_manager.load_inner_buffers()
+        self.inner_lrs = self.artifact_manager.load_inner_lrs() if self.hparams.use_lslr else None
+        self.inner_buffers = self.artifact_manager.load_inner_buffers() if self.hparams.use_bnrs else None
 
         self.already_finetuned: bool = False
 
@@ -90,18 +106,23 @@ class MamlEvaluator:
         # TODO add anil back
         # str(num_step), because keys are strings like "0" through saving in json
         # and it would be useless computation to transform to int
-        eff_num_step = min(num_step, len(self.inner_buffers.keys()) - 1)
-        y_hat = self.model.func_forward(x_support, params, self.inner_buffers[str(eff_num_step)])
+        if self.inner_buffers is not None:
+            eff_num_step = min(num_step, len(self.inner_buffers.keys()) - 1)
+            inner_buffers_to_use = self.inner_buffers[str(eff_num_step)]
+        else:
+            eff_num_step = num_step
+            inner_buffers_to_use = self.model.get_state()[1]
+        y_hat = self.model.func_forward(x_support, params, inner_buffers_to_use)
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
         print('train_loss at step {}: {}'.format(num_step, train_loss.item()))
 
         grads = autograd.grad(train_loss, params.values(),
                               create_graph=False)
 
-        # return self.inner_optimizer.update_params(params, names_grads_dict, num_step)
-        factor = 0.5 if num_step > eff_num_step else 1  # TODO evaluate if this actually brings an improvement
-        return {n: p - factor * self.inner_lrs[n.replace('.', '-')][eff_num_step] *
-                       g for (n, p), g in zip(params.items(), grads)}
+        factor = 1 if eff_num_step >= num_step else 0.5  # TODO evaluate if this actually brings an improvement
+        return {n: p - factor *
+                (self.inner_lrs[n.replace('.', '-')][eff_num_step] if self.inner_lrs is not None else self.hparams.alpha)
+                * g for (n, p), g in zip(params.items(), grads)}
 
     def finetune(self):
         if self.already_finetuned:
