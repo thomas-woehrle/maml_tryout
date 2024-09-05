@@ -4,16 +4,27 @@ from typing import Protocol
 import torch
 import torch.nn as nn
 
+NamedParams = dict[str, torch.nn.parameter.Parameter]
+NamedBuffers = dict[str, torch.Tensor]
 
-class TrainingStage(enum.Enum):
+
+class Stage(enum.Enum):
     """Represents the training stage of the MAML algorithm.
 
     TrainingStage and SampleMode combined, determine which datapool to use.
-    TRAIN, EVAL and TEST refer to datasets, which themselves are split into QUERY and SUPPORT data/tasks
+    TRAIN, VAL and TEST refer to datasets, which themselves are split into QUERY and SUPPORT data/tasks
     according to MAML theory"""
     TRAIN = enum.auto()
     VAL = enum.auto()
     TEST = enum.auto()
+
+
+class SetToSetType(enum.Enum):
+    """Represents the phase of the MAML algorithm, common in set-to-set learning
+
+    """
+    SUPPORT = enum.auto()
+    TARGET = enum.auto()
 
 
 class MamlModel(nn.Module):
@@ -52,7 +63,7 @@ class MamlTask(Protocol):
     """Protocol representing a task as it is used in MAML.
     """
 
-    def sample(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, sts_type: SetToSetType) -> tuple[torch.Tensor, torch.Tensor]:
         """Samples from the task. 
 
         Returns:
@@ -60,12 +71,14 @@ class MamlTask(Protocol):
         """
         ...
 
-    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor, stage: Stage, sts_type: SetToSetType) -> torch.Tensor:
         """Calculates the loss as specified by the task. 
 
         Args:
             y_hat: The prediction
             y: The target
+            stage: The stage ie TRAIN, VAL, TEST, etc.
+            sts_type: The phase of the task ie Support or Target phase
 
         Returns:
             A tensor containing the loss. Has to be a single value

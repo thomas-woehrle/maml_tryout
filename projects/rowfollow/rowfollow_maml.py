@@ -3,7 +3,7 @@ from typing import Any
 
 import mlflow
 
-import maml
+import maml_train
 import maml_api
 import maml_config
 
@@ -27,18 +27,23 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
         }
         mlflow.log_dict(bags_dict, 'bags.json')
 
-    def sample_task(training_stage: maml_api.TrainingStage):
-        if training_stage == maml_api.TrainingStage.TRAIN:
+    def sample_task(training_stage: maml_api.Stage):
+        if training_stage == maml_api.Stage.TRAIN:
             return rowfollow_task.RowfollowTask(random.choice(train_bags),
                                                 maml_hparams.k, env_config.device, sigma=other_config['sigma'])
-        if training_stage == maml_api.TrainingStage.VAL:
+        if training_stage == maml_api.Stage.VAL:
             return rowfollow_task.RowfollowTask(random.choice(val_bags),
                                                 maml_hparams.k, env_config.device, sigma=other_config['sigma'])
 
     model = rowfollow_model.RowfollowModel()
     model.to(env_config.device)
 
-    maml.train(maml_hparams, sample_task, model, env_config.device, do_use_mlflow=True)
+    trainer = maml_train.MamlTrainer(hparams=maml_hparams,
+                                     sample_task=sample_task,
+                                     model=model,
+                                     device=env_config.device,
+                                     do_use_mlflow=env_config.do_use_mlflow)
+    trainer.run_training()
 
 
 if __name__ == '__main__':

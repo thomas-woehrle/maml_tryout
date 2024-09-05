@@ -3,7 +3,7 @@ from typing import Any
 
 import mlflow
 
-import maml
+import maml_train
 import maml_api
 import maml_config
 
@@ -29,19 +29,24 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
         }
         mlflow.log_dict(chars_dict, 'chars.json')
 
-    def sample_task(training_stage: maml_api.TrainingStage):
+    def sample_task(training_stage: maml_api.Stage):
 
-        if training_stage == maml_api.TrainingStage.TRAIN:
+        if training_stage == maml_api.Stage.TRAIN:
             return omniglot_task.OmniglotTask(random.sample(train_chars, k=other_config['n']),
                                               maml_hparams.k, env_config.device)
-        if training_stage == maml_api.TrainingStage.VAL:
+        if training_stage == maml_api.Stage.VAL:
             return omniglot_task.OmniglotTask(random.sample(val_chars, k=other_config['n']),
                                               maml_hparams.k, env_config.device)
 
     omniglotModel = omniglot_model.OmniglotModel(other_config['n'])
     omniglotModel.to(env_config.device)
 
-    maml.train(maml_hparams, sample_task, omniglotModel, env_config.device, do_use_mlflow=env_config.do_use_mlflow)
+    trainer = maml.MamlTrainer(hparams=maml_hparams,
+                               sample_task=sample_task,
+                               model=omniglotModel,
+                               device=env_config.device,
+                               do_use_mlflow=env_config.do_use_mlflow)
+    trainer.train()
 
 
 if __name__ == '__main__':
