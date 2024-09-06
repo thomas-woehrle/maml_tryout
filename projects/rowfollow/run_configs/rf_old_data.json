@@ -1,0 +1,20 @@
+{
+  "maml_hparams": {
+    "use_anil": false,
+    "n_episodes": 2,
+    "meta_batch_size": 4,
+    "inner_steps": 1,
+    "k": 4,
+    "alpha": 0.4,
+    "beta": 0.001,
+    "min_beta": 0.00001
+  },
+  "env_config": {
+    "device": "cpu",
+    "data_dir": "/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/vision_data_latest",
+    "do_use_mlflow": true
+  },
+  "other_config": {
+    "sigma": 10
+  }
+}

@@ -1,6 +1,9 @@
 import ast
 import os
+import random
+from typing import Optional
 
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -128,6 +131,85 @@ class RowfollowTask(maml_api.MamlTask):
 
         Args:
             y_hat: Should be passed as raw model output 
+            y: Should be the target as probabilities
+            stage: ...
+            sts_type: ...
+
+        Returns:
+            KL-divergence loss of y_hat and y
+        """
+        if stage == maml_api.Stage.VAL and sts_type == maml_api.SetToSetType.TARGET:
+            return l1_distance_argmax_sum(y_hat, y)
+        else:
+            y_hat = F.log_softmax(y_hat.view(*y_hat.size()[:2], -1), 2).view_as(y_hat)
+
+            return (self._loss_fct(y_hat[:, 0], y[:, 0])
+                    + self._loss_fct(y_hat[:, 1], y[:, 1])
+                    + self._loss_fct(y_hat[:, 2], y[:, 2]))
+
+
+class RowfollowTaskOldDataset(maml_api.MamlTask):
+    def __init__(self, annotations_file_path: str, support_data_path: str,
+                 k: int, device: torch.device, sigma: int = 10,
+                 target_data_path: Optional[str] = None, seed: Optional[int] = None):
+        self.annotations: pd.DataFrame = pd.read_csv(annotations_file_path)
+        self.support_data_path: str = support_data_path
+        self.target_data_path: str = target_data_path or self.support_data_path
+        self.k: int = k
+        self.device: torch.device = device
+        self.sigma: int = sigma
+        self.seed: Optional[int] = seed
+        if self.seed:
+            random.seed(self.seed)
+
+        self._loss_fct = nn.KLDivLoss(reduction='batchmean')
+
+    def sample(self, sts_type: maml_api.SetToSetType) -> tuple[torch.Tensor, torch.Tensor]:
+        data_path = self.support_data_path if sts_type == maml_api.SetToSetType.SUPPORT else self.target_data_path
+        all_img_names = [f for f in os.listdir(data_path) if f.endswith('.jpg')]
+        img_names = random.sample(all_img_names, k=self.k)
+
+        x = []
+        y = []
+
+        for img_name in img_names:
+            image_path = os.path.join(data_path, img_name)
+
+            df_row = self.annotations[self.annotations['image_name'] == img_name].iloc[0]
+            vp = np.array([df_row['X_VAN_Cords'], df_row['Y_VAN_Cords']], dtype=np.float32)
+            ll = np.array([df_row['X_line_Left'], df_row['Y_line_Left']], dtype=np.float32)
+            lr = np.array([df_row['X_line_Right'], df_row['Y_line_Right']], dtype=np.float32)
+
+            original_size = 1280, 720
+            new_size = 320, 224
+            downscale_x = new_size[0] / original_size[0]
+            downscale_y = new_size[1] / original_size[1]
+
+            vp *= [downscale_x, downscale_y]
+            ll *= [downscale_x, downscale_y]
+            lr *= [downscale_x, downscale_y]
+
+            pre_processed_image, _ = utils.pre_process_image_old_data(image_path, new_size=new_size)
+            pre_processed_image = torch.from_numpy(pre_processed_image)
+            x.append(pre_processed_image)
+
+            # vp, ll, lr are coordinates, but we need distributions
+            vp_gt = utils.dist_from_keypoint(vp, sig=self.sigma, downscale=4)
+            ll_gt = utils.dist_from_keypoint(ll, sig=self.sigma, downscale=4)
+            lr_gt = utils.dist_from_keypoint(lr, sig=self.sigma, downscale=4)
+            y.append(torch.stack([vp_gt, ll_gt, lr_gt]))
+
+        x = torch.stack(x)
+        y = torch.stack(y)
+
+        return x.to(self.device), y.to(self.device)
+
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor,
+                  stage: maml_api.Stage, sts_type: maml_api.SetToSetType) -> torch.Tensor:
+        """See also description of MamlTask
+
+        Args:
+            y_hat: Should be passed as raw model output
             y: Should be the target as probabilities
             stage: ...
             sts_type: ...

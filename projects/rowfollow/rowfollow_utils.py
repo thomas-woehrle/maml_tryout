@@ -28,6 +28,24 @@ def pre_process_image(path_to_image):
     return data, image
 
 
+def pre_process_image_old_data(path_to_image, new_size=(320, 224)):
+    # Image is loaded in BGR format as np array
+    image = cv2.imread(path_to_image)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert to RGB
+
+    # resize image -> we don't worry about distortion here
+    image = cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
+
+    data = image/255
+    # ImageNet Normalization because, ResNet trained on it
+    data[:, :, 0] = (data[:, :, 0]-0.485)/0.229
+    data[:, :, 1] = (data[:, :, 1]-0.456)/0.224
+    data[:, :, 2] = (data[:, :, 2]-0.406)/0.225
+    data = np.transpose(data, axes=[2, 0, 1]).astype(np.float32)
+
+    return data, image
+
+
 def dist_from_keypoint(center: tuple[int, int], image_size: tuple[int, int] = (80, 56), sig: float = 10, downscale: float = 1):
     # adapted from https://stackoverflow.com/a/58621239
     """Creates a probability distribution from a keypoint, by applying a gaussian, then a softmax.
@@ -75,31 +93,3 @@ def get_train_and_test_bags(directory, exclude_first_x, exclude_last_y):
     # Step 5: Return the lists of selected and excluded sub-subdirectories
     return train_days_bags, test_days_bags
 
-
-# sorted(glob.glob(<cornfield_directory> + '/*/)), length atm 26
-ALL_DAYS = ['/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220609_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220613_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220615_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220620_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220622_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220627_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220629_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220705_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220706_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220711_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220714_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220718_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220721_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220725_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220729_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220802_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220804_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220808_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220810_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220815_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220901_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220906_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220908_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220920_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20221006_cornfield/']
