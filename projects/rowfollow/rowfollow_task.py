@@ -164,6 +164,27 @@ class RowfollowTaskOldDataset(maml_api.MamlTask):
 
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')
 
+    @staticmethod
+    def get_kps_for_image(image_name: str, annotations_df: Optional[pd.DataFrame] = None,
+                          annotation_row: Optional[pd.Series] = None):
+        if annotation_row is None:
+            annotation_row = annotations_df[annotations_df['image_name'] == image_name].iloc[0]
+
+        vp = np.array([annotation_row['X_VAN_Cords'], annotation_row['Y_VAN_Cords']], dtype=np.float32)
+        ll = np.array([annotation_row['X_line_Left'], annotation_row['Y_line_Left']], dtype=np.float32)
+        lr = np.array([annotation_row['X_line_Right'], annotation_row['Y_line_Right']], dtype=np.float32)
+
+        original_size = 1280, 720
+        new_size = 320, 224
+        downscale_x = new_size[0] / original_size[0]
+        downscale_y = new_size[1] / original_size[1]
+
+        vp *= [downscale_x, downscale_y]
+        ll *= [downscale_x, downscale_y]
+        lr *= [downscale_x, downscale_y]
+
+        return vp, ll, lr
+
     def sample(self, sts_type: maml_api.SetToSetType) -> tuple[torch.Tensor, torch.Tensor]:
         data_path = self.support_data_path if sts_type == maml_api.SetToSetType.SUPPORT else self.target_data_path
         all_img_names = [f for f in os.listdir(data_path) if f.endswith('.jpg')]
@@ -175,21 +196,9 @@ class RowfollowTaskOldDataset(maml_api.MamlTask):
         for img_name in img_names:
             image_path = os.path.join(data_path, img_name)
 
-            df_row = self.annotations[self.annotations['image_name'] == img_name].iloc[0]
-            vp = np.array([df_row['X_VAN_Cords'], df_row['Y_VAN_Cords']], dtype=np.float32)
-            ll = np.array([df_row['X_line_Left'], df_row['Y_line_Left']], dtype=np.float32)
-            lr = np.array([df_row['X_line_Right'], df_row['Y_line_Right']], dtype=np.float32)
+            vp, ll, lr = self.get_kps_for_image(img_name, self.annotations)
 
-            original_size = 1280, 720
-            new_size = 320, 224
-            downscale_x = new_size[0] / original_size[0]
-            downscale_y = new_size[1] / original_size[1]
-
-            vp *= [downscale_x, downscale_y]
-            ll *= [downscale_x, downscale_y]
-            lr *= [downscale_x, downscale_y]
-
-            pre_processed_image, _ = utils.pre_process_image_old_data(image_path, new_size=new_size)
+            pre_processed_image, _ = utils.pre_process_image_old_data(image_path, new_size=(320, 224))
             pre_processed_image = torch.from_numpy(pre_processed_image)
             x.append(pre_processed_image)
 

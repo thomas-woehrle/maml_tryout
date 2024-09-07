@@ -6,6 +6,8 @@ import torch.nn as nn
 
 NamedParams = dict[str, torch.nn.parameter.Parameter]
 NamedBuffers = dict[str, torch.Tensor]
+InnerLrs = dict[str, list[float]]
+InnerBuffers = dict[str, dict[str, torch.Tensor]]
 
 
 class Stage(enum.Enum):

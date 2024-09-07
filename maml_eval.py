@@ -161,3 +161,55 @@ class MamlEvaluator:
         y_hat = self.model(x_target)
 
         return y_hat, task.calc_loss(y_hat, y_target, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET)
+
+
+class MamlFinetuner:
+    def __init__(self,
+                 model: maml_api.MamlModel,
+                 inner_lrs: maml_api.InnerLrs,
+                 inner_buffers: maml_api.InnerBuffers,
+                 inner_steps: int,
+                 task: maml_api.MamlTask
+                 ):
+        self.model: maml_api.MamlModel = model
+        self.inner_lrs: maml_api.InnerLrs = inner_lrs
+        self.inner_buffers: maml_api.InnerBuffers = inner_buffers
+        self.inner_steps: int = inner_steps
+        self.task: maml_api.MamlTask = task
+
+    def inner_step(self, x_support: torch.Tensor, y_support: torch.Tensor,
+                   params: maml_api.NamedParams,
+                   num_step: int) -> maml_api.NamedParams:
+        capped_num_step = min(num_step, len(self.inner_buffers.keys()) - 1)
+
+        y_hat = self.model.func_forward(x_support, params, self.inner_buffers[str(capped_num_step)])
+        train_loss = self.task.calc_loss(y_hat, y_support, maml_api.Stage.VAL, maml_api.SetToSetType.SUPPORT)
+        print('train_loss at step {}: {}'.format(num_step, train_loss.item()))
+
+        grads = autograd.grad(train_loss, params.values(), create_graph=False)
+
+        # TODO implement different learning rate strategies
+        # after the number of learned steps, the learning rate of the last step is halved
+        factor = 1 if capped_num_step == num_step else 0.5
+        return {n: p - factor * self.inner_lrs[n.replace('.', '-')][capped_num_step] * g
+                for (n, p), g in zip(params.items(), grads)}
+
+    def finetune(self):
+        """Finetunes self.model using the given (x, y)
+
+        x_support: Input image batch in shape BxCxHxW
+        y_support: Target in shape Bx[...]
+        """
+        print('Finetuning...')
+        params, _ = self.model.get_state()
+        params_i = {n: p for n, p in params.items()}
+
+        x_support, y_support = self.task.sample(maml_api.SetToSetType.SUPPORT)
+
+        # i symbolizes the i-th step
+        for i in range(self.inner_steps):
+            # finetune params
+            params_i = self.inner_step(x_support, y_support, params_i, i)
+
+        self.model.load_state_dict(params_i, strict=False)
+        print('Finished finetuning. \n')
