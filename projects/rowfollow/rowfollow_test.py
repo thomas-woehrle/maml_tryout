@@ -95,10 +95,23 @@ class TestConfig:
     device: torch.device
 
 
+MLFLOW_CACHE_DIR = 'mlflow-cache/'
+
+
+def get_local_artifact_path(run_id: str, episode: int, rel_artifact_path: str):
+    return os.path.join(MLFLOW_CACHE_DIR, 'mlruns', run_id, f'ep{episode}', rel_artifact_path)
+
+
 def load_model(run_id: str, episode: int) -> maml_api.MamlModel:
     model_uri = 'runs:/{}/{}/{}'.format(run_id, 'ep{}'.format(episode), 'model')
+    local_path = get_local_artifact_path(run_id, episode, 'model')
 
-    return mlflow.pytorch.load_model(model_uri)
+    try:
+        os.makedirs(local_path, exist_ok=True)
+        return mlflow.pytorch.load_model(local_path)
+
+    except (OSError, mlflow.exceptions.MlflowException) as e:
+        return mlflow.pytorch.load_model(model_uri, local_path)
 
 
 def load_inner_lrs(run_id: str, episode: int) -> maml_api.InnerLrs:
