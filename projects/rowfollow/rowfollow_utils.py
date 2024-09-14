@@ -109,7 +109,7 @@ def get_train_data_paths(train_base_dir_path: str, dataset_name: str,
     """
     if dataset_name == '1506':
         ...
-    elif dataset_name == 'all-early':
+    elif dataset_name == 'early':
         df = pd.read_csv(dataset_info_path)
 
         # Filter the rows where 'split' is 'train' and 'growth_stage' is 'early'
