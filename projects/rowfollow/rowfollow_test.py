@@ -181,11 +181,6 @@ class TestConfig:
     mlflow_experiment: Optional[str] = None
 
 
-def get_support_collection_path(base_path: str, support_collection_id: str) -> str:
-    # TODO Integrate more complicated ids
-    return os.path.join(base_path, 'train', support_collection_id)
-
-
 def run_main_from_test_config(test_config: TestConfig):
     support_collection_path = os.path.join(test_config.base_path, 'train', test_config.support_collection)
     validation_collections_paths = rowfollow_utils.get_val_data_paths(os.path.join(test_config.base_path, 'val'),

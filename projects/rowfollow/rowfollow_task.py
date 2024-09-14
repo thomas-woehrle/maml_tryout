@@ -172,8 +172,8 @@ class RowfollowTaskOldDataset(maml_api.MamlTask):
             annotation_row = annotations_df[annotations_df['image_name'] == image_name].iloc[0]
 
         vp = np.array([annotation_row['X_VAN_Cords'], annotation_row['Y_VAN_Cords']], dtype=np.float32)
-        ll = np.array([annotation_row['X_line_Left'], annotation_row['Y_line_Left']], dtype=np.float32)
-        lr = np.array([annotation_row['X_line_Right'], annotation_row['Y_line_Right']], dtype=np.float32)
+        ll = np.array([annotation_row['Xlbottom_intercept'], annotation_row['Ylbottom_intercept']], dtype=np.float32)
+        lr = np.array([annotation_row['Xrbottom_intercept'], annotation_row['Yrbottom_intercept']], dtype=np.float32)
 
         original_size = 1280, 720
         new_size = 320, 224
