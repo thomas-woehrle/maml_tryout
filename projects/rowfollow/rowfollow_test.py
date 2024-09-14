@@ -119,7 +119,8 @@ def test_main(run_id: str,
               validation_collections_paths: list[str],
               validation_annotations_file_path: str,
               device: torch.device,
-              seed: Optional[int]):
+              seed: Optional[int],
+              use_mlflow: bool):
     model = load_model(run_id, episode)
     inner_lrs = load_inner_lrs(run_id, episode)
     inner_buffers = load_inner_buffers(run_id, episode)
@@ -130,8 +131,13 @@ def test_main(run_id: str,
                                                   device,
                                                   seed=seed)
 
-    finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, inner_steps, task)
+    finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, inner_steps, task, use_mlflow)
     finetuner.finetune()
+
+    if use_mlflow:
+        print('Uploading model to mlflow server...')
+        example_x = task.sample(maml_api.SetToSetType.SUPPORT)[0].cpu().numpy()
+        mlflow.pytorch.log_model(model, 'finetuned_model', input_example=example_x)
 
     model.eval()
     val_dataset = RowfollowValDataset(validation_collections_paths,
@@ -145,6 +151,14 @@ def test_main(run_id: str,
         batches_processed += 1
         print('total_loss:', total_loss)
         print('avg_loss:', total_loss / batches_processed)
+
+        if use_mlflow:
+            mlflow.log_metric('total_loss', total_loss, batches_processed)
+            mlflow.log_metric('avg_loss', total_loss / batches_processed, batches_processed)
+
+    if use_mlflow:
+        mlflow.log_metric('final_total_loss', total_loss)
+        mlflow.log_metric('final_avg_loss', total_loss / batches_processed)
 
     print('total loss: {}'.format(total_loss))
 
@@ -161,8 +175,10 @@ class TestConfig:
     validation_dataset_name: str
     validation_annotations_file_path: str
     seed: Optional[int]
-    device: torch.device
+    device: str
     dataset_info_path: Optional[str] = None
+    use_mlflow: bool = False
+    mlflow_experiment: Optional[str] = None
 
 
 def get_support_collection_path(base_path: str, support_collection_id: str) -> str:
@@ -176,6 +192,23 @@ def run_main_from_test_config(test_config: TestConfig):
                                                                       test_config.validation_dataset_name,
                                                                       test_config.dataset_info_path)
 
+    if test_config.use_mlflow:
+        print('Setting up mlflow run...')
+        if test_config.mlflow_experiment is None:
+            mlflow.set_experiment(f'/run({test_config.run_id})-val')
+        else:
+            mlflow.set_experiment(test_config.mlflow_experiment)
+        mlflow.start_run()
+
+        mlflow.log_params(vars(test_config))
+        mlflow.log_dict(vars(test_config), 'test_config.json')
+        data_info = {
+            'support_collection': support_collection_path,
+            'validation_collections': validation_collections_paths
+        }
+        mlflow.log_dict(data_info, 'data_info.json')
+        print('Finished setting up mlflow run.')
+
     test_main(run_id=test_config.run_id,
               episode=test_config.episode,
               k=test_config.k,
@@ -186,15 +219,17 @@ def run_main_from_test_config(test_config: TestConfig):
               validation_collections_paths=validation_collections_paths,
               validation_annotations_file_path=os.path.join(test_config.base_path,
                                                             test_config.validation_annotations_file_path),
-              device=test_config.device,
-              seed=test_config.seed)
+              device=torch.device(test_config.device),
+              seed=test_config.seed,
+              use_mlflow=test_config.use_mlflow)
+
+    mlflow.end_run()
 
 
 def get_config_from_file(path: str) -> TestConfig:
     with open(path, 'r') as f:
         config_dict = json.load(f)
         test_config = TestConfig(**config_dict)
-        test_config.device = torch.device(test_config.device)
         test_config.dataset_info_path = os.path.join(test_config.base_path, 'dataset_info.csv')
         return test_config
 

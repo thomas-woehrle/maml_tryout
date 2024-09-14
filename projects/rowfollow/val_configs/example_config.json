@@ -1,7 +1,7 @@
 {
   "run_id": "d4ec641cf0794fea998498a600fae9ce",
   "episode": 4999,
-  "k": 4,
+  "k": 10,
   "inner_steps": 3,
   "base_path": "/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/vision_data_latest",
   "support_collection": "collection-150620",
@@ -9,5 +9,6 @@
   "validation_dataset_name": "all-val",
   "validation_annotations_file_path": "val/v2_annotations_val.csv",
   "seed": 0,
-  "device": "cpu"
+  "device": "cpu",
+  "use_mlflow": true
 }

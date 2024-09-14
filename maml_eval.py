@@ -169,13 +169,15 @@ class MamlFinetuner:
                  inner_lrs: maml_api.InnerLrs,
                  inner_buffers: maml_api.InnerBuffers,
                  inner_steps: int,
-                 task: maml_api.MamlTask
+                 task: maml_api.MamlTask,
+                 use_mlflow: bool = False
                  ):
         self.model: maml_api.MamlModel = model
         self.inner_lrs: maml_api.InnerLrs = inner_lrs
         self.inner_buffers: maml_api.InnerBuffers = inner_buffers
         self.inner_steps: int = inner_steps
         self.task: maml_api.MamlTask = task
+        self.use_mlflow: bool = use_mlflow
 
     def inner_step(self, x_support: torch.Tensor, y_support: torch.Tensor,
                    params: maml_api.NamedParams,
@@ -185,6 +187,9 @@ class MamlFinetuner:
         y_hat = self.model.func_forward(x_support, params, self.inner_buffers[str(capped_num_step)])
         train_loss = self.task.calc_loss(y_hat, y_support, maml_api.Stage.VAL, maml_api.SetToSetType.SUPPORT)
         print('train_loss at step {}: {}'.format(num_step, train_loss.item()))
+
+        if self.use_mlflow:
+            mlflow.log_metric('train_loss', train_loss.item(), num_step)
 
         grads = autograd.grad(train_loss, params.values(), create_graph=False)
 
