@@ -98,19 +98,21 @@ class TestConfig:
 MLFLOW_CACHE_DIR = 'mlflow-cache/'
 
 
-def get_local_artifact_path(run_id: str, episode: int, rel_artifact_path: str):
-    return os.path.join(MLFLOW_CACHE_DIR, 'mlruns', run_id, f'ep{episode}', rel_artifact_path)
+def get_local_artifact_path(run_id: str, episode: int):
+    return os.path.join(MLFLOW_CACHE_DIR, 'mlruns', run_id, f'ep{episode}')
 
 
 def load_model(run_id: str, episode: int) -> maml_api.MamlModel:
     model_uri = 'runs:/{}/{}/{}'.format(run_id, 'ep{}'.format(episode), 'model')
-    local_path = get_local_artifact_path(run_id, episode, 'model')
+    local_path = get_local_artifact_path(run_id, episode)
 
     try:
         os.makedirs(local_path, exist_ok=True)
-        return mlflow.pytorch.load_model(local_path)
+        print('Trying to load cached model...')
+        return mlflow.pytorch.load_model(os.path.join(local_path, 'model'))
 
     except (OSError, mlflow.exceptions.MlflowException) as e:
+        print('No cached model. Downloading model...')
         return mlflow.pytorch.load_model(model_uri, local_path)
 
 
@@ -140,19 +142,24 @@ def test_main(test_config: TestConfig):
     task = rowfollow_task.RowfollowTaskOldDataset(test_config.support_annotations_file_path,
                                                   test_config.support_collection_path,
                                                   test_config.k,
-                                                  test_config.device)
+                                                  test_config.device,
+                                                  seed=0)
 
     finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, test_config.inner_steps, task)
     finetuner.finetune()
 
+    model.eval()
     val_dataset = RowfollowValDataset(test_config.validation_collections_paths,
                                       test_config.validation_annotations_file_path)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=8, shuffle=False)
     total_loss = 0.0
+    batches_processed = 0
     for x, y in val_dataloader:
         y_hat = model(x)
         total_loss += task.calc_loss(y_hat, y, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET).item()
+        batches_processed += 1
         print('total_loss:', total_loss)
+        print('avg_loss:', total_loss / batches_processed)
 
     print('total loss: {}'.format(total_loss))
 

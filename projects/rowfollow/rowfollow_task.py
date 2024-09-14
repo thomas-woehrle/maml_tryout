@@ -159,7 +159,8 @@ class RowfollowTaskOldDataset(maml_api.MamlTask):
         self.device: torch.device = device
         self.sigma: int = sigma
         self.seed: Optional[int] = seed
-        if self.seed:
+        if self.seed is not None:
+            print(f'Setting seed to {self.seed}')
             random.seed(self.seed)
 
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')
@@ -188,6 +189,8 @@ class RowfollowTaskOldDataset(maml_api.MamlTask):
     def sample(self, sts_type: maml_api.SetToSetType) -> tuple[torch.Tensor, torch.Tensor]:
         data_path = self.support_data_path if sts_type == maml_api.SetToSetType.SUPPORT else self.target_data_path
         all_img_names = [f for f in os.listdir(data_path) if f.endswith('.jpg')]
+        if self.seed is not None:
+            all_img_names = sorted(all_img_names)
         img_names = random.sample(all_img_names, k=self.k)
 
         x = []
