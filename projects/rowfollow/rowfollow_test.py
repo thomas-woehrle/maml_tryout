@@ -156,12 +156,13 @@ class TestConfig:
     k: int
     inner_steps: int
     base_path: str
-    support_collection_id: str
+    support_collection: str
     support_annotations_file_path: str
-    validation_collections_id: str
+    validation_dataset_name: str
     validation_annotations_file_path: str
     seed: Optional[int]
     device: torch.device
+    dataset_info_path: Optional[str] = None
 
 
 def get_support_collection_path(base_path: str, support_collection_id: str) -> str:
@@ -169,25 +170,20 @@ def get_support_collection_path(base_path: str, support_collection_id: str) -> s
     return os.path.join(base_path, 'train', support_collection_id)
 
 
-def get_validation_collections_paths(base_path: str, validation_collections_id: str) -> list[str]:
-    val_dir_base_path = os.path.join(base_path, 'val')
-    if validation_collections_id == 'all_val':
-        return [os.path.join(val_dir_base_path, d) for d in os.listdir(val_dir_base_path)
-                if os.path.isdir(os.path.join(val_dir_base_path, d))]
-    # TODO add other options
-
-
 def run_main_from_test_config(test_config: TestConfig):
+    support_collection_path = os.path.join(test_config.base_path, 'train', test_config.support_collection)
+    validation_collections_paths = rowfollow_utils.get_val_data_paths(os.path.join(test_config.base_path, 'val'),
+                                                                      test_config.validation_dataset_name,
+                                                                      test_config.dataset_info_path)
+
     test_main(run_id=test_config.run_id,
               episode=test_config.episode,
               k=test_config.k,
               inner_steps=test_config.inner_steps,
-              support_collection_path=get_support_collection_path(test_config.base_path,
-                                                                  test_config.support_collection_id),
+              support_collection_path=support_collection_path,
               support_annotations_file_path=os.path.join(test_config.base_path,
                                                          test_config.support_annotations_file_path),
-              validation_collections_paths=get_validation_collections_paths(test_config.base_path,
-                                                                            test_config.validation_collections_id),
+              validation_collections_paths=validation_collections_paths,
               validation_annotations_file_path=os.path.join(test_config.base_path,
                                                             test_config.validation_annotations_file_path),
               device=test_config.device,
@@ -199,12 +195,17 @@ def get_config_from_file(path: str) -> TestConfig:
         config_dict = json.load(f)
         test_config = TestConfig(**config_dict)
         test_config.device = torch.device(test_config.device)
+        test_config.dataset_info_path = os.path.join(test_config.base_path, 'dataset_info.csv')
         return test_config
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2 or sys.argv[1] == '-h' or not os.path.exists(sys.argv[1]):
+    if len(sys.argv) != 2 or sys.argv[1] == '-h':
         print('USAGE: python rowfollow_test.py path/to/test_config.json')
+        sys.exit(1)
+
+    if not os.path.exists(sys.argv[1]):
+        print(f'Path {sys.argv[1]} does not exist')
         sys.exit(1)
 
     path_to_config = sys.argv[1]

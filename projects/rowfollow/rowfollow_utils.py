@@ -1,7 +1,10 @@
+from typing import Optional
+
 import cv2
 import glob
 import os
 
+import pandas as pd
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -93,3 +96,49 @@ def get_train_and_test_bags(directory, exclude_first_x, exclude_last_y):
     # Step 5: Return the lists of selected and excluded sub-subdirectories
     return train_days_bags, test_days_bags
 
+
+def get_train_data_paths(train_base_dir_path: str, dataset_name: str,
+                         dataset_info_path: Optional[str] = None) -> list[str]:
+    """Given a base_dir path and a datset_name, creates a list of directories to include in training.
+
+    base_dir_path: Path to the directory containing the training data in subfolders.
+    dataset_name: Name of the dataset to use. These are preconfigured.
+
+    Returns:
+        List of paths to training data folders making up the desired dataset.
+    """
+    if dataset_name == '1506':
+        ...
+    elif dataset_name == 'all-early':
+        df = pd.read_csv(dataset_info_path)
+
+        # Filter the rows where 'split' is 'train' and 'growth_stage' is 'early'
+        filtered_df = df[(df['split'] == 'train') & (df['growth_stage'] == 'early')]
+
+        # Get the 'collection_name' column as a list of strings
+        collection_names = filtered_df['collection_name'].tolist()
+        return [os.path.join(train_base_dir_path, cn) for cn in collection_names]
+    elif dataset_name == 'all-season':
+        return [os.path.join(train_base_dir_path, d) for d in os.listdir(train_base_dir_path)
+                if os.path.isdir(os.path.join(train_base_dir_path, d))]
+    else:
+        raise ValueError(f'Unknown dataset name: {dataset_name}')
+
+
+def get_val_data_paths(val_base_dir_path: str, dataset_name: str,
+                       dataset_info_path: Optional[str] = None) -> list[str]:
+    if dataset_name == 'all-val':
+        return [os.path.join(val_base_dir_path, d) for d in os.listdir(val_base_dir_path)
+         if os.path.isdir(os.path.join(val_base_dir_path, d))]
+    elif dataset_name in ['early', 'late', 'very-late']:
+        dataset_name = dataset_name.replace('_', ' ')
+
+        df = pd.read_csv(dataset_info_path)
+        filtered_df = df[(df['split'] == 'val') & (df['growth_stage'] == dataset_name)]
+
+        collection_names = filtered_df['collection_name'].tolist()
+        return [os.path.join(val_base_dir_path, cn) for cn in collection_names]
+    elif dataset_name.startswith('LITERAL-'):
+        return [os.path.join(val_base_dir_path, dataset_name)]
+    else:
+        raise ValueError(f'Unknown dataset name: {dataset_name}')

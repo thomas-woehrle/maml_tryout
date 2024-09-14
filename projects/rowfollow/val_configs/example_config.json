@@ -1,15 +1,13 @@
-
 {
-  "run_id": "af946f76673142368f2414f00259e51e",
-  "episode": 9999,
+  "run_id": "d4ec641cf0794fea998498a600fae9ce",
+  "episode": 4999,
   "k": 4,
   "inner_steps": 3,
   "base_path": "/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/vision_data_latest",
-  "support_collection_id": "collection-150620",
+  "support_collection": "collection-150620",
   "support_annotations_file_path": "train/v2_annotations_train.csv",
-  "validation_collections_id": "all_val",
+  "validation_dataset_name": "all-val",
   "validation_annotations_file_path": "val/v2_annotations_val.csv",
   "seed": 0,
   "device": "cpu"
-
 }
