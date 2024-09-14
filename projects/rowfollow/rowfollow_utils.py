@@ -50,6 +50,30 @@ def pre_process_image_old_data(path_to_image, new_size=(320, 224)):
     return data, image
 
 
+def reverse_preprocessing(pre_processed_img: torch.Tensor):
+    # Move the tensor to CPU if it's not
+    pre_processed_img = pre_processed_img.cpu() if pre_processed_img.is_cuda else pre_processed_img
+
+    # Convert to NumPy array
+    image = pre_processed_img.numpy()
+
+    # Transpose to HWC (Height, Width, Channels)
+    image = np.transpose(image, (1, 2, 0))
+
+    # Reverse normalization
+    image[:, :, 0] = image[:, :, 0] * 0.229 + 0.485  # Red channel
+    image[:, :, 1] = image[:, :, 1] * 0.224 + 0.456  # Green channel
+    image[:, :, 2] = image[:, :, 2] * 0.225 + 0.406  # Blue channel
+
+    # Convert range back to [0, 255]
+    image = (image * 255).astype(np.uint8)
+
+    # Convert RGB to BGR (for OpenCV)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+    return image
+
+
 def dist_from_keypoint(center: tuple[int, int], image_size: tuple[int, int] = (80, 56), sig: float = 10, downscale: float = 1):
     # adapted from https://stackoverflow.com/a/58621239
     """Creates a probability distribution from a keypoint, by applying a gaussian, then a softmax.

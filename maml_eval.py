@@ -1,7 +1,9 @@
 import os
 from typing import Callable, Optional
 
+import cv2
 import mlflow
+import numpy as np
 import torch
 from torch import autograd
 
@@ -112,6 +114,7 @@ class MamlEvaluator:
         else:
             eff_num_step = num_step
             inner_buffers_to_use = self.model.get_state()[1]
+
         y_hat = self.model.func_forward(x_support, params, inner_buffers_to_use)
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
         print('train_loss at step {}: {}'.format(num_step, train_loss.item()))
@@ -163,6 +166,31 @@ class MamlEvaluator:
         return y_hat, task.calc_loss(y_hat, y_target, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET)
 
 
+# TODO This does NOT belong here, but will live with it for now:
+def reverse_preprocessing(pre_processed_img: torch.Tensor) -> np.ndarray:
+    # Move the tensor to CPU if it's not
+    pre_processed_img = pre_processed_img.cpu() if pre_processed_img.is_cuda else pre_processed_img
+
+    # Convert to NumPy array
+    image = pre_processed_img.numpy()
+
+    # Transpose to HWC (Height, Width, Channels)
+    image = np.transpose(image, (1, 2, 0))
+
+    # Reverse normalization
+    image[:, :, 0] = image[:, :, 0] * 0.229 + 0.485  # Red channel
+    image[:, :, 1] = image[:, :, 1] * 0.224 + 0.456  # Green channel
+    image[:, :, 2] = image[:, :, 2] * 0.225 + 0.406  # Blue channel
+
+    # Convert range back to [0, 255]
+    image = (image * 255).astype(np.uint8)
+
+    # Convert RGB to BGR (for OpenCV)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+    return image
+
+
 class MamlFinetuner:
     def __init__(self,
                  model: maml_api.MamlModel,
@@ -210,6 +238,13 @@ class MamlFinetuner:
         params_i = {n: p for n, p in params.items()}
 
         x_support, y_support = self.task.sample(maml_api.SetToSetType.SUPPORT)
+
+        if self.use_mlflow:
+            # NOTE: currently this is only applicable to the rowfollow usecase
+            for idx, img in enumerate(x_support):
+                img = reverse_preprocessing(img)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                mlflow.log_image(img, f'support_imgs/{idx}.png')
 
         # i symbolizes the i-th step
         for i in range(self.inner_steps):
