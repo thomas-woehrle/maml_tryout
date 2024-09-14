@@ -53,7 +53,8 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, env_config: mam
 
     train_data_path = os.path.join(env_config.data_dir, 'train')
     train_annotations = os.path.join(train_data_path, 'v2_annotations_train.csv')
-    train_collections = rowfollow_utils.get_train_data_paths(train_data_path, 'all-early', dataset_info_path)
+    train_collections = rowfollow_utils.get_train_data_paths(train_data_path, other_config['train_dataset_name'],
+                                                             dataset_info_path)
 
     val_data_path = os.path.join(env_config.data_dir, 'val')
     val_annotations = os.path.join(val_data_path, 'v2_annotations_val.csv')
