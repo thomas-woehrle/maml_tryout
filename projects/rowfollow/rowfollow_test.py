@@ -176,6 +176,8 @@ class TestConfig:
     validation_annotations_file_path: str
     seed: Optional[int]
     device: str
+    # only asl-then-0.5 can be used atm
+    lr_strategy: str = 'asl-then-0.5'  # possible values in the future: asl-then-0.5, 0.5-then-0.5, asl-then-anneal
     dataset_info_path: Optional[str] = None
     use_mlflow: bool = False
     mlflow_experiment: Optional[str] = None

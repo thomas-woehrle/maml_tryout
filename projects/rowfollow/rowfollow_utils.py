@@ -1,3 +1,4 @@
+import math
 from typing import Optional
 
 import cv2
@@ -142,3 +143,12 @@ def get_val_data_paths(val_base_dir_path: str, dataset_name: str,
         return [os.path.join(val_base_dir_path, dataset_name)]
     else:
         raise ValueError(f'Unknown dataset name: {dataset_name}')
+
+
+def cosine_anneal(step, start_step, end_step, start_value, end_value):
+    # Calculate the current position within the annealing range
+    relative_step = step - start_step
+    total_steps = end_step - start_step
+    # Compute the cosine annealed value
+    value = end_value + (start_value - end_value) / 2 * (1 + math.cos(math.pi * relative_step / total_steps))
+    return value
