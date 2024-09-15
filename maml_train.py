@@ -201,6 +201,7 @@ class MamlTrainer(nn.Module):
                     total_val_loss = torch.tensor(0.0, device=self.device)
                     for i in range(self.n_val_iters):
                         val_loss = self.meta_forward(end_params, buffers, maml_api.Stage.VAL)
+                        self.logger.log_metric(f"val_loss/ep{episode}", val_loss.item(), step=i)
                         total_val_loss += val_loss
 
                     self.logger.log_metric("avg_val_loss", total_val_loss.item() / self.n_val_iters, step=episode)
