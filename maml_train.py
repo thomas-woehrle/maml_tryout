@@ -18,8 +18,8 @@ class MamlTrainer(nn.Module):
     def __init__(self, hparams: maml_config.MamlHyperParameters,
                  sample_task: Callable[[maml_api.Stage], maml_api.MamlTask], model: maml_api.MamlModel,
                  device: torch.device, do_use_mlflow: bool = False,
-                 n_val_iters: int = 10,
-                 log_val_loss_every_n_episodes: int = 100,
+                 n_val_iters: int = 20,
+                 log_val_loss_every_n_episodes: int = 500,
                  log_model_every_n_episodes: int = 1000,
                  *args, **kwargs):
         """
@@ -170,7 +170,7 @@ class MamlTrainer(nn.Module):
             lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.hparams.n_episodes,
                                                                 eta_min=self.hparams.min_beta)
         for episode in range(self.hparams.n_episodes):
-            self.log_buffers(episode)
+            # self.log_buffers(episode)
             self.current_episode = episode
             optimizer.zero_grad()
             params, buffers = self.model.get_state()
@@ -188,18 +188,22 @@ class MamlTrainer(nn.Module):
                 lr_scheduler.step()
 
             if self.do_use_mlflow:
-                # log acc_loss
+                # log batch_loss
                 self.logger.log_metric("batch_loss", batch_loss.item(), step=episode)
 
                 # log eval_loss under condition
                 if episode % self.log_val_loss_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:
                     end_params, _ = self.model.get_state()
-                    # TODO take mean across multiple runs?
-                    # TODO the val_loss shouldn't just be the meta_forward loss ?
                     # TODO meta_buffers shouldn't be updated in this case inside meta_forward,
-                    #  but does not matter to much for now
-                    val_loss = self.meta_forward(end_params, buffers, maml_api.Stage.VAL)
-                    self.logger.log_metric("val_loss", val_loss.item(), step=episode)
+                    #  but does not matter too much for now
+
+                    # Accumulate a val loss across n_val_iters times
+                    total_val_loss = torch.tensor(0.0, device=self.device)
+                    for i in range(self.n_val_iters):
+                        val_loss = self.meta_forward(end_params, buffers, maml_api.Stage.VAL)
+                        total_val_loss += val_loss
+
+                    self.logger.log_metric("avg_val_loss", total_val_loss.item() / self.n_val_iters, step=episode)
 
                 # log model under condition
                 if episode % self.log_model_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:
