@@ -1,6 +1,9 @@
 import ast
 import os
+import random
+from typing import Optional
 
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -128,6 +131,97 @@ class RowfollowTask(maml_api.MamlTask):
 
         Args:
             y_hat: Should be passed as raw model output 
+            y: Should be the target as probabilities
+            stage: ...
+            sts_type: ...
+
+        Returns:
+            KL-divergence loss of y_hat and y
+        """
+        if stage == maml_api.Stage.VAL and sts_type == maml_api.SetToSetType.TARGET:
+            return l1_distance_argmax_sum(y_hat, y)
+        else:
+            y_hat = F.log_softmax(y_hat.view(*y_hat.size()[:2], -1), 2).view_as(y_hat)
+
+            return (self._loss_fct(y_hat[:, 0], y[:, 0])
+                    + self._loss_fct(y_hat[:, 1], y[:, 1])
+                    + self._loss_fct(y_hat[:, 2], y[:, 2]))
+
+
+class RowfollowTaskOldDataset(maml_api.MamlTask):
+    def __init__(self, annotations_file_path: str, support_data_path: str,
+                 k: int, device: torch.device, sigma: int = 10,
+                 target_data_path: Optional[str] = None, seed: Optional[int] = None):
+        self.annotations: pd.DataFrame = pd.read_csv(annotations_file_path)
+        self.support_data_path: str = support_data_path
+        self.target_data_path: str = target_data_path or self.support_data_path
+        self.k: int = k
+        self.device: torch.device = device
+        self.sigma: int = sigma
+        self.seed: Optional[int] = seed
+        if self.seed is not None:
+            print(f'Setting seed to {self.seed}')
+            random.seed(self.seed)
+
+        self._loss_fct = nn.KLDivLoss(reduction='batchmean')
+
+    @staticmethod
+    def get_kps_for_image(image_name: str, annotations_df: Optional[pd.DataFrame] = None,
+                          annotation_row: Optional[pd.Series] = None):
+        if annotation_row is None:
+            annotation_row = annotations_df[annotations_df['image_name'] == image_name].iloc[0]
+
+        vp = np.array([annotation_row['X_VAN_Cords'], annotation_row['Y_VAN_Cords']], dtype=np.float32)
+        ll = np.array([annotation_row['Xlbottom_intercept'], annotation_row['Ylbottom_intercept']], dtype=np.float32)
+        lr = np.array([annotation_row['Xrbottom_intercept'], annotation_row['Yrbottom_intercept']], dtype=np.float32)
+
+        original_size = 1280, 720
+        new_size = 320, 224
+        downscale_x = new_size[0] / original_size[0]
+        downscale_y = new_size[1] / original_size[1]
+
+        vp *= [downscale_x, downscale_y]
+        ll *= [downscale_x, downscale_y]
+        lr *= [downscale_x, downscale_y]
+
+        return vp, ll, lr
+
+    def sample(self, sts_type: maml_api.SetToSetType) -> tuple[torch.Tensor, torch.Tensor]:
+        data_path = self.support_data_path if sts_type == maml_api.SetToSetType.SUPPORT else self.target_data_path
+        all_img_names = [f for f in os.listdir(data_path) if f.endswith('.jpg')]
+        if self.seed is not None:
+            all_img_names = sorted(all_img_names)
+        img_names = random.sample(all_img_names, k=self.k)
+
+        x = []
+        y = []
+
+        for img_name in img_names:
+            image_path = os.path.join(data_path, img_name)
+
+            vp, ll, lr = self.get_kps_for_image(img_name, self.annotations)
+
+            pre_processed_image, _ = utils.pre_process_image_old_data(image_path, new_size=(320, 224))
+            pre_processed_image = torch.from_numpy(pre_processed_image)
+            x.append(pre_processed_image)
+
+            # vp, ll, lr are coordinates, but we need distributions
+            vp_gt = utils.dist_from_keypoint(vp, sig=self.sigma, downscale=4)
+            ll_gt = utils.dist_from_keypoint(ll, sig=self.sigma, downscale=4)
+            lr_gt = utils.dist_from_keypoint(lr, sig=self.sigma, downscale=4)
+            y.append(torch.stack([vp_gt, ll_gt, lr_gt]))
+
+        x = torch.stack(x)
+        y = torch.stack(y)
+
+        return x.to(self.device), y.to(self.device)
+
+    def calc_loss(self, y_hat: torch.Tensor, y: torch.Tensor,
+                  stage: maml_api.Stage, sts_type: maml_api.SetToSetType) -> torch.Tensor:
+        """See also description of MamlTask
+
+        Args:
+            y_hat: Should be passed as raw model output
             y: Should be the target as probabilities
             stage: ...
             sts_type: ...

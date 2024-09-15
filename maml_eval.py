@@ -1,7 +1,9 @@
 import os
 from typing import Callable, Optional
 
+import cv2
 import mlflow
+import numpy as np
 import torch
 from torch import autograd
 
@@ -112,6 +114,7 @@ class MamlEvaluator:
         else:
             eff_num_step = num_step
             inner_buffers_to_use = self.model.get_state()[1]
+
         y_hat = self.model.func_forward(x_support, params, inner_buffers_to_use)
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
         print('train_loss at step {}: {}'.format(num_step, train_loss.item()))
@@ -161,3 +164,92 @@ class MamlEvaluator:
         y_hat = self.model(x_target)
 
         return y_hat, task.calc_loss(y_hat, y_target, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET)
+
+
+# TODO This does NOT belong here, but will live with it for now:
+def reverse_preprocessing(pre_processed_img: torch.Tensor) -> np.ndarray:
+    # Move the tensor to CPU if it's not
+    pre_processed_img = pre_processed_img.cpu() if pre_processed_img.is_cuda else pre_processed_img
+
+    # Convert to NumPy array
+    image = pre_processed_img.numpy()
+
+    # Transpose to HWC (Height, Width, Channels)
+    image = np.transpose(image, (1, 2, 0))
+
+    # Reverse normalization
+    image[:, :, 0] = image[:, :, 0] * 0.229 + 0.485  # Red channel
+    image[:, :, 1] = image[:, :, 1] * 0.224 + 0.456  # Green channel
+    image[:, :, 2] = image[:, :, 2] * 0.225 + 0.406  # Blue channel
+
+    # Convert range back to [0, 255]
+    image = (image * 255).astype(np.uint8)
+
+    # Convert RGB to BGR (for OpenCV)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+    return image
+
+
+class MamlFinetuner:
+    def __init__(self,
+                 model: maml_api.MamlModel,
+                 inner_lrs: maml_api.InnerLrs,
+                 inner_buffers: maml_api.InnerBuffers,
+                 inner_steps: int,
+                 task: maml_api.MamlTask,
+                 use_mlflow: bool = False
+                 ):
+        self.model: maml_api.MamlModel = model
+        self.inner_lrs: maml_api.InnerLrs = inner_lrs
+        self.inner_buffers: maml_api.InnerBuffers = inner_buffers
+        self.inner_steps: int = inner_steps
+        self.task: maml_api.MamlTask = task
+        self.use_mlflow: bool = use_mlflow
+
+    def inner_step(self, x_support: torch.Tensor, y_support: torch.Tensor,
+                   params: maml_api.NamedParams,
+                   num_step: int) -> maml_api.NamedParams:
+        capped_num_step = min(num_step, len(self.inner_buffers.keys()) - 1)
+
+        y_hat = self.model.func_forward(x_support, params, self.inner_buffers[str(capped_num_step)])
+        train_loss = self.task.calc_loss(y_hat, y_support, maml_api.Stage.VAL, maml_api.SetToSetType.SUPPORT)
+        print('train_loss at step {}: {}'.format(num_step, train_loss.item()))
+
+        if self.use_mlflow:
+            mlflow.log_metric('train_loss', train_loss.item(), num_step)
+
+        grads = autograd.grad(train_loss, params.values(), create_graph=False)
+
+        # TODO implement different learning rate strategies
+        # after the number of learned steps, the learning rate of the last step is halved
+        factor = 1 if capped_num_step == num_step else 0.5
+        return {n: p - factor * self.inner_lrs[n.replace('.', '-')][capped_num_step] * g
+                for (n, p), g in zip(params.items(), grads)}
+
+    def finetune(self):
+        """Finetunes self.model using the given (x, y)
+
+        x_support: Input image batch in shape BxCxHxW
+        y_support: Target in shape Bx[...]
+        """
+        print('Finetuning...')
+        params, _ = self.model.get_state()
+        params_i = {n: p for n, p in params.items()}
+
+        x_support, y_support = self.task.sample(maml_api.SetToSetType.SUPPORT)
+
+        if self.use_mlflow:
+            # NOTE: currently this is only applicable to the rowfollow usecase
+            for idx, img in enumerate(x_support):
+                img = reverse_preprocessing(img)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                mlflow.log_image(img, f'support_imgs/{idx}.png')
+
+        # i symbolizes the i-th step
+        for i in range(self.inner_steps):
+            # finetune params
+            params_i = self.inner_step(x_support, y_support, params_i, i)
+
+        self.model.load_state_dict(params_i, strict=False)
+        print('Finished finetuning. \n')

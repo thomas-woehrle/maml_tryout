@@ -1,7 +1,11 @@
+import math
+from typing import Optional
+
 import cv2
 import glob
 import os
 
+import pandas as pd
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -26,6 +30,48 @@ def pre_process_image(path_to_image):
     data = np.transpose(data, axes=[2, 0, 1]).astype(np.float32)
 
     return data, image
+
+
+def pre_process_image_old_data(path_to_image, new_size=(320, 224)):
+    # Image is loaded in BGR format as np array
+    image = cv2.imread(path_to_image)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert to RGB
+
+    # resize image -> we don't worry about distortion here
+    image = cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
+
+    data = image/255
+    # ImageNet Normalization because, ResNet trained on it
+    data[:, :, 0] = (data[:, :, 0]-0.485)/0.229
+    data[:, :, 1] = (data[:, :, 1]-0.456)/0.224
+    data[:, :, 2] = (data[:, :, 2]-0.406)/0.225
+    data = np.transpose(data, axes=[2, 0, 1]).astype(np.float32)
+
+    return data, image
+
+
+def reverse_preprocessing(pre_processed_img: torch.Tensor):
+    # Move the tensor to CPU if it's not
+    pre_processed_img = pre_processed_img.cpu() if pre_processed_img.is_cuda else pre_processed_img
+
+    # Convert to NumPy array
+    image = pre_processed_img.numpy()
+
+    # Transpose to HWC (Height, Width, Channels)
+    image = np.transpose(image, (1, 2, 0))
+
+    # Reverse normalization
+    image[:, :, 0] = image[:, :, 0] * 0.229 + 0.485  # Red channel
+    image[:, :, 1] = image[:, :, 1] * 0.224 + 0.456  # Green channel
+    image[:, :, 2] = image[:, :, 2] * 0.225 + 0.406  # Blue channel
+
+    # Convert range back to [0, 255]
+    image = (image * 255).astype(np.uint8)
+
+    # Convert RGB to BGR (for OpenCV)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+    return image
 
 
 def dist_from_keypoint(center: tuple[int, int], image_size: tuple[int, int] = (80, 56), sig: float = 10, downscale: float = 1):
@@ -76,30 +122,57 @@ def get_train_and_test_bags(directory, exclude_first_x, exclude_last_y):
     return train_days_bags, test_days_bags
 
 
-# sorted(glob.glob(<cornfield_directory> + '/*/)), length atm 26
-ALL_DAYS = ['/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220603_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220609_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220613_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220615_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220620_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220622_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220627_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220629_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220705_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220706_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220711_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220714_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220718_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220721_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220725_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220729_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220802_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220804_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220808_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220810_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220815_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220901_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220906_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220908_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20220920_cornfield/',
-            '/Users/tomwoehrle/Documents/research_assistance/cornfield1_labeled_new/20221006_cornfield/']
+def get_train_data_paths(train_base_dir_path: str, dataset_name: str,
+                         dataset_info_path: Optional[str] = None) -> list[str]:
+    """Given a base_dir path and a datset_name, creates a list of directories to include in training.
+
+    base_dir_path: Path to the directory containing the training data in subfolders.
+    dataset_name: Name of the dataset to use. These are preconfigured.
+
+    Returns:
+        List of paths to training data folders making up the desired dataset.
+    """
+    if dataset_name == '1506':
+        ...
+    elif dataset_name == 'early':
+        df = pd.read_csv(dataset_info_path)
+
+        # Filter the rows where 'split' is 'train' and 'growth_stage' is 'early'
+        filtered_df = df[(df['split'] == 'train') & (df['growth_stage'] == 'early')]
+
+        # Get the 'collection_name' column as a list of strings
+        collection_names = filtered_df['collection_name'].tolist()
+        return [os.path.join(train_base_dir_path, cn) for cn in collection_names]
+    elif dataset_name == 'all-season':
+        return [os.path.join(train_base_dir_path, d) for d in os.listdir(train_base_dir_path)
+                if os.path.isdir(os.path.join(train_base_dir_path, d))]
+    else:
+        raise ValueError(f'Unknown dataset name: {dataset_name}')
+
+
+def get_val_data_paths(val_base_dir_path: str, dataset_name: str,
+                       dataset_info_path: Optional[str] = None) -> list[str]:
+    if dataset_name == 'all-val':
+        return [os.path.join(val_base_dir_path, d) for d in os.listdir(val_base_dir_path)
+         if os.path.isdir(os.path.join(val_base_dir_path, d))]
+    elif dataset_name in ['early', 'late', 'very-late']:
+        dataset_name = dataset_name.replace('_', ' ')
+
+        df = pd.read_csv(dataset_info_path)
+        filtered_df = df[(df['split'] == 'val') & (df['growth_stage'] == dataset_name)]
+
+        collection_names = filtered_df['collection_name'].tolist()
+        return [os.path.join(val_base_dir_path, cn) for cn in collection_names]
+    elif dataset_name.startswith('LITERAL-'):
+        return [os.path.join(val_base_dir_path, dataset_name)]
+    else:
+        raise ValueError(f'Unknown dataset name: {dataset_name}')
+
+
+def cosine_anneal(step, start_step, end_step, start_value, end_value):
+    # Calculate the current position within the annealing range
+    relative_step = step - start_step
+    total_steps = end_step - start_step
+    # Compute the cosine annealed value
+    value = end_value + (start_value - end_value) / 2 * (1 + math.cos(math.pi * relative_step / total_steps))
+    return value
