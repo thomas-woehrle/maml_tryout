@@ -17,10 +17,8 @@ import maml_logging
 class MamlTrainer(nn.Module):
     def __init__(self, hparams: maml_config.MamlHyperParameters,
                  sample_task: Callable[[maml_api.Stage], maml_api.MamlTask], model: maml_api.MamlModel,
-                 device: torch.device, do_use_mlflow: bool = False,
-                 n_val_iters: int = 20,
-                 log_val_loss_every_n_episodes: int = 500,
-                 log_model_every_n_episodes: int = 1000,
+                 device: torch.device, do_use_mlflow: bool,
+                 train_config: maml_config.TrainConfig,
                  *args, **kwargs):
         """
         Args:
@@ -41,15 +39,16 @@ class MamlTrainer(nn.Module):
         self.device: torch.device = device
         self.do_use_mlflow: bool = do_use_mlflow  # TODO remove
 
-        self.n_val_iters: int = n_val_iters
-        self.log_val_loss_every_n_episodes: int = log_val_loss_every_n_episodes
-        self.log_model_every_n_episodes: int = log_model_every_n_episodes
+        self.n_val_iters: int = train_config.n_val_iters
+        self.log_val_loss_every_n_episodes: int = train_config.log_val_loss_every_n_episodes
+        self.log_model_every_n_episodes: int = train_config.log_model_every_n_episodes
 
         # TODO Parametrize the following 2 attributes
         # the first 10 percent of episodes will use strong multi-step loss updates, afterward weak
-        self.multi_step_loss_n_episodes: int = int(hparams.n_episodes * 0.1) or 1
+        self.multi_step_loss_n_episodes: int = int(hparams.n_episodes * hparams.msl_percentage_of_episodes) or 1
         # the first 30 percent of episodes will use first order updates
-        self.first_order_updates_n_episodes: int = int(hparams.n_episodes * 0.3)
+        self.first_order_updates_n_episodes: int = int(hparams.n_episodes *
+                                                       hparams.first_order_percentage_of_episodes) or 1
 
         example_params, example_buffers = self.model.get_state()
         # inner_optimizer is created in any case, but only used when hparams.use_lslr is True

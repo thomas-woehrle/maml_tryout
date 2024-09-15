@@ -27,6 +27,8 @@ class MamlHyperParameters():
         use_lslr: Whether to learn Per-Layer Per-Step Learning Rates (LSLR).
         use_bnrs: Whether to use Per-Step Batch Normalization Running Statistics (BNRS).
             As of 08/26/2024 bnrs is used even if this is set to False.
+        first_order_percentage_of_episodes: Percentage of episodes which use first order, if use_da=True
+        msl_percentage_of_episodes: Percentage of episodes which use strong MSL, if use_msl=True
     """
     n_episodes: int = 10_000
     meta_batch_size: int = 32
@@ -41,6 +43,22 @@ class MamlHyperParameters():
     use_da: bool = True
     use_lslr: bool = True
     use_bnrs: bool = True
+    first_order_percentage_of_episodes: float = 0.1
+    msl_percentage_of_episodes: float = 0.3
+
+
+@dataclass
+class TrainConfig:
+    """Represents configurations to the training process, which are not inherent to MAML
+
+    log_val_loss_every_n_episodes: Frequency of logging validation losses.
+    log_model_every_n_episodes: Frequency of logging models.
+    n_val_iters: Frequency of validation iterations.
+    """
+    log_model_every_n_episodes: int = 1000
+    log_val_loss_every_n_episodes: int = 500
+    n_val_iters: int = 100
+
 
 @dataclass
 class EnvConfig:
@@ -57,7 +75,7 @@ class EnvConfig:
     do_use_mlflow: bool = False
 
 
-def load_configuration(file_path: str) -> tuple[MamlHyperParameters, EnvConfig, dict[str, Any]]:
+def load_configuration(file_path: str) -> tuple[MamlHyperParameters, TrainConfig, EnvConfig, dict[str, Any]]:
     """Turns a .json file into a MamlHyperParameters object and a dictionary. 
 
     It expects the following form (fields that have a default can be omitted): 
@@ -95,20 +113,22 @@ def load_configuration(file_path: str) -> tuple[MamlHyperParameters, EnvConfig, 
 
     maml_hparams = MamlHyperParameters(**data['maml_hparams'])
     data['env_config']['device'] = torch.device(data['env_config']['device'])
+    train_config = data.get('train_config', {})
+    train_config = TrainConfig(**train_config)
     env_config = EnvConfig(**data['env_config'])
     other_config = data.get('other_config', {})
 
     if env_config.do_use_mlflow:
-        maml_logging.log_configuration(maml_hparams, env_config, other_config)
+        maml_logging.log_configuration(maml_hparams, train_config, env_config, other_config)
 
-    return maml_hparams, env_config, other_config
+    return maml_hparams, train_config, env_config, other_config
 
 
-def parse_maml_args():
+def parse_maml_args() -> tuple[MamlHyperParameters, TrainConfig, EnvConfig, dict[str, Any]]:
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("config_filepath", type=str)
     config_filepath: str = arg_parser.parse_args().config_filepath
 
-    maml_hparams, env_config, other_config = load_configuration(
+    maml_hparams, train_config, env_config, other_config = load_configuration(
         config_filepath)
-    return maml_hparams, env_config, other_config
+    return maml_hparams, train_config, env_config, other_config

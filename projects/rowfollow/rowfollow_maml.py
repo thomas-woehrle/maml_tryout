@@ -47,8 +47,8 @@ def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.
     trainer.run_training()
 
 
-def main_old_data(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig,
-                  other_config: dict[str, Any]):
+def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: maml_config.TrainConfig,
+                  env_config: maml_config.EnvConfig, other_config: dict[str, Any]):
     dataset_info_path = os.path.join(env_config.data_dir, 'dataset_info.csv')
 
     train_data_path = os.path.join(env_config.data_dir, 'train')
@@ -92,7 +92,8 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, env_config: mam
                                      sample_task=sample_task,
                                      model=model,
                                      device=env_config.device,
-                                     do_use_mlflow=env_config.do_use_mlflow)
+                                     do_use_mlflow=env_config.do_use_mlflow,
+                                     train_config=train_config)
     trainer.run_training()
 
 

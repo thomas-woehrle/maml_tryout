@@ -8,7 +8,9 @@ import torch
 import maml_config
 
 
-def log_configuration(hparams: "maml_config.MamlHyperParameters", env_config: "maml_config.EnvConfig",
+def log_configuration(hparams: "maml_config.MamlHyperParameters",
+                      train_config: "maml_config.TrainConfig",
+                      env_config: "maml_config.EnvConfig",
                       other_config: dict[str, Any]):
     """Logs the hparams and configuration.
 
@@ -17,6 +19,8 @@ def log_configuration(hparams: "maml_config.MamlHyperParameters", env_config: "m
     """
     mlflow.log_params(vars(hparams))
     mlflow.log_dict(vars(hparams), 'hparams.json')
+    mlflow.log_params(vars(train_config))
+    mlflow.log_dict(vars(train_config), 'train_config.json')
     env_config = vars(env_config)
     env_config['device'] = str(env_config['device'])
     mlflow.log_params(env_config)
