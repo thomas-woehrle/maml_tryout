@@ -10,7 +10,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import maml_api
-from projects.rowfollow import rowfollow_utils as utils
+import rowfollow_utils as utils
+from rf_utils import vision
 
 
 def l1_distance_argmax_sum(y_hat, y, reduction='mean'):
@@ -167,16 +168,18 @@ class RowfollowTaskOldDataset(maml_api.MamlTask):
 
     @staticmethod
     def get_kps_for_image(image_name: str, annotations_df: Optional[pd.DataFrame] = None,
-                          annotation_row: Optional[pd.Series] = None):
+                          annotation_row: Optional[pd.Series] = None,
+                          original_size: tuple[int, int] = (1280, 720),
+                          new_size: tuple[int, int] = (320, 224),):
         if annotation_row is None:
             annotation_row = annotations_df[annotations_df['image_name'] == image_name].iloc[0]
 
         vp = np.array([annotation_row['X_VAN_Cords'], annotation_row['Y_VAN_Cords']], dtype=np.float32)
-        ll = np.array([annotation_row['Xlbottom_intercept'], annotation_row['Ylbottom_intercept']], dtype=np.float32)
-        lr = np.array([annotation_row['Xrbottom_intercept'], annotation_row['Yrbottom_intercept']], dtype=np.float32)
+        ll = np.array([annotation_row['X_line_Left'], annotation_row['Y_line_Left']], dtype=np.float32)
+        lr = np.array([annotation_row['X_line_Right'], annotation_row['Y_line_Right']], dtype=np.float32)
+        ll = vision.get_coordinates_on_frame(vp, ll, (1279, 719))
+        lr = vision.get_coordinates_on_frame(vp, lr, (1279, 719))
 
-        original_size = 1280, 720
-        new_size = 320, 224
         downscale_x = new_size[0] / original_size[0]
         downscale_y = new_size[1] / original_size[1]
 
