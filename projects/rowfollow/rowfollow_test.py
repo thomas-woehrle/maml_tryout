@@ -17,8 +17,8 @@ import rowfollow_utils
 
 
 class RowfollowValDataset(torch.utils.data.Dataset):
-    def __init__(self, validation_collections_paths: list[str], validation_annotations_file_path: str):
-        self.validation_collections_paths: list[str] = validation_collections_paths
+    def __init__(self, validation_collection_path: str, validation_annotations_file_path: str):
+        self.validation_collection_path: str = validation_collection_path
         self.validation_annotations_file_path: str = validation_annotations_file_path
 
         self.annotations_df: pd.DataFrame = pd.read_csv(self.validation_annotations_file_path)
@@ -28,11 +28,10 @@ class RowfollowValDataset(torch.utils.data.Dataset):
     def _filter_existing_images(self):
         # Create a list of available image paths from the directories
         available_image_names = []
-        for path in self.validation_collections_paths:
-            for root, _, files in os.walk(path):
-                for file in files:
-                    if file.endswith(('jpg', 'jpeg', 'png')):  # Adjust extensions as needed
-                        available_image_names.append(file)
+        for root, _, files in os.walk(self.validation_collection_path):
+            for file in files:
+                if file.endswith(('jpg', 'jpeg', 'png')):  # Adjust extensions as needed
+                    available_image_names.append(file)
 
         # Convert available image paths to a set for faster lookup
         available_image_names = set(available_image_names)
@@ -49,16 +48,7 @@ class RowfollowValDataset(torch.utils.data.Dataset):
         image_name = annotation_row['image_name']
         collection_name = image_name.split('_cam')[0]
 
-        collection_path = None
-        for path in self.validation_collections_paths:
-            if collection_name in path:
-                collection_path = path
-                break
-
-        if collection_path:
-            image_path = os.path.join(collection_path, image_name)
-        else:
-            raise FileNotFoundError(f"Collection {collection_name} not found in the provided paths.")
+        image_path = os.path.join(self.validation_collection_path, image_name)
 
         vp, ll, lr = rowfollow_task.RowfollowTaskOldDataset.get_kps_for_image(image_name, annotation_row=annotation_row)
 
@@ -116,11 +106,12 @@ def test_main(run_id: str,
               inner_steps: int,
               support_collection_path: str,
               support_annotations_file_path: str,
-              validation_collections_paths: list[str],
-              validation_annotations_file_path: str,
+              target_collection_path: str,
+              target_annotations_file_path: str,
               device: torch.device,
               seed: Optional[int],
               use_mlflow: bool):
+
     model = load_model(run_id, episode)
     inner_lrs = load_inner_lrs(run_id, episode)
     inner_buffers = load_inner_buffers(run_id, episode)
@@ -132,7 +123,7 @@ def test_main(run_id: str,
                                                   seed=seed)
 
     finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, inner_steps, task, use_mlflow)
-    finetuner.finetune()
+    finetuner.finetune()  # TODO add do_finetune parameter to train_config
 
     if use_mlflow:
         print('Uploading model to mlflow server...')
@@ -140,8 +131,8 @@ def test_main(run_id: str,
         mlflow.pytorch.log_model(model, 'finetuned_model', input_example=example_x)
 
     model.eval()
-    val_dataset = RowfollowValDataset(validation_collections_paths,
-                                      validation_annotations_file_path)
+    val_dataset = RowfollowValDataset(target_collection_path,
+                                      target_annotations_file_path)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=8, shuffle=False)
     total_loss = 0.0
     batches_processed = 0
@@ -172,10 +163,10 @@ class TestConfig:
     base_path: str
     support_collection: str
     support_annotations_file_path: str
-    validation_dataset_name: str
-    validation_annotations_file_path: str
     seed: Optional[int]
     device: str
+    target_collection: Optional[str] = None
+    target_annotations_file_path: Optional[str] = None
     # only asl-then-0.5 can be used atm
     lr_strategy: str = 'asl-then-0.5'  # possible values in the future: asl-then-0.5, 0.5-then-0.5, asl-then-anneal
     dataset_info_path: Optional[str] = None
@@ -184,10 +175,17 @@ class TestConfig:
 
 
 def run_main_from_test_config(test_config: TestConfig):
-    support_collection_path = os.path.join(test_config.base_path, 'train', test_config.support_collection)
-    validation_collections_paths = rowfollow_utils.get_val_data_paths(os.path.join(test_config.base_path, 'val'),
-                                                                      test_config.validation_dataset_name,
-                                                                      test_config.dataset_info_path)
+    support_collection_path = os.path.join(test_config.base_path, test_config.support_collection)
+    support_annotations_file_path = os.path.join(test_config.base_path, test_config.support_annotations_file_path)
+    if test_config.target_collection is None:
+        target_collection_path = support_collection_path
+    else:
+        target_collection_path = os.path.join(test_config.base_path, test_config.target_collection)
+
+    if test_config.target_annotations_file_path is None:
+        target_annotations_file_path = support_annotations_file_path
+    else:
+        target_annotations_file_path = os.path.join(test_config.base_path, test_config.target_annotations_file_path)
 
     if test_config.use_mlflow:
         print('Setting up mlflow run...')
@@ -201,7 +199,7 @@ def run_main_from_test_config(test_config: TestConfig):
         mlflow.log_dict(vars(test_config), 'test_config.json')
         data_info = {
             'support_collection': support_collection_path,
-            'validation_collections': validation_collections_paths
+            'target_collection': target_collection_path
         }
         mlflow.log_dict(data_info, 'data_info.json')
         print('Finished setting up mlflow run.')
@@ -213,9 +211,8 @@ def run_main_from_test_config(test_config: TestConfig):
               support_collection_path=support_collection_path,
               support_annotations_file_path=os.path.join(test_config.base_path,
                                                          test_config.support_annotations_file_path),
-              validation_collections_paths=validation_collections_paths,
-              validation_annotations_file_path=os.path.join(test_config.base_path,
-                                                            test_config.validation_annotations_file_path),
+              target_collection_path=target_collection_path,
+              target_annotations_file_path=target_annotations_file_path,
               device=torch.device(test_config.device),
               seed=test_config.seed,
               use_mlflow=test_config.use_mlflow)

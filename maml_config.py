@@ -43,8 +43,8 @@ class MamlHyperParameters():
     use_da: bool = True
     use_lslr: bool = True
     use_bnrs: bool = True
-    first_order_percentage_of_episodes: float = 0.1
-    msl_percentage_of_episodes: float = 0.3
+    first_order_percentage_of_episodes: float = 0.3
+    msl_percentage_of_episodes: float = 0.1
 
 
 @dataclass

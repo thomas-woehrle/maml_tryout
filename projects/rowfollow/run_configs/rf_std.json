@@ -15,6 +15,7 @@
     "do_use_mlflow": true
   },
   "other_config": {
-    "sigma": 10
+    "sigma": 10,
+    "train_dataset_name": "early"
   }
 }

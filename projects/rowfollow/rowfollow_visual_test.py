@@ -53,16 +53,17 @@ def main(run_id: str,
         cv2.imshow('', img_with_lines)
 
         cv2.waitKey()
+        cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
-    run_id = '1cbf8ca2896e4b179612642a895799b8'
-    episode = 1000
-    k = 4
+    run_id = '2749cd39b76c4fe2b438716cf81aa3c3'
+    episode = 19000
+    k = 8
     inner_steps = 3
     base_path = '/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/vision_data_latest/'
-    support_collection_path = os.path.join(base_path, 'train', 'collection-150620')
-    support_annotations_file_path = os.path.join(base_path, 'train', 'v2_annotations_train.csv')
+    support_collection_path = os.path.join(base_path, 'val', 'ts_2021_09_17_11h44m52s-final-cam')
+    support_annotations_file_path = os.path.join(base_path, 'val', 'v2_annotations_val.csv')
     target_directory = support_collection_path
     device = torch.device('cpu')
     seed = 0
