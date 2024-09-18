@@ -132,8 +132,11 @@ def get_train_data_paths(train_base_dir_path: str, dataset_name: str,
     Returns:
         List of paths to training data folders making up the desired dataset.
     """
-    if dataset_name == '1506':
-        ...
+    if dataset_name == 'early_and_very_late':
+        col_early_1 = os.path.join(train_base_dir_path, 'collection-150620')
+        col_early_2 = os.path.join(train_base_dir_path, '06_15_June15th_Autonomous_farm')
+        col_late = os.path.join(train_base_dir_path, 'late_season')
+        return [col_early_1, col_early_2, col_late]
     elif dataset_name == 'early':
         df = pd.read_csv(dataset_info_path)
 
