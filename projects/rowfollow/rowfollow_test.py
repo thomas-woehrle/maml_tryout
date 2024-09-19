@@ -180,7 +180,7 @@ def calc_val_loss_for_train(current_episode: int,
 
     model.eval()
     val_dataset = RowfollowValDataset(support_collection_path,
-                                      support_annotations_file_path)
+                                      support_annotations_file_path, device=device)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=8, shuffle=False)
     total_loss = 0.0
     batches_processed = 0
