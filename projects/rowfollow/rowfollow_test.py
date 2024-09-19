@@ -18,13 +18,14 @@ import rowfollow_utils
 
 
 class RowfollowValDataset(torch.utils.data.Dataset):
-    def __init__(self, validation_collection_path: str, validation_annotations_file_path: str):
+    def __init__(self, validation_collection_path: str, validation_annotations_file_path: str, device: torch.device):
         self.validation_collection_path: str = validation_collection_path
         self.validation_annotations_file_path: str = validation_annotations_file_path
 
         self.annotations_df: pd.DataFrame = pd.read_csv(self.validation_annotations_file_path)
         self.annotations_df = self._filter_existing_images()
         self.sigma = 10
+        self.device = device
 
     def _filter_existing_images(self):
         # Create a list of available image paths from the directories
@@ -61,7 +62,7 @@ class RowfollowValDataset(torch.utils.data.Dataset):
         ll_gt = rowfollow_utils.dist_from_keypoint(ll, sig=self.sigma, downscale=4)
         lr_gt = rowfollow_utils.dist_from_keypoint(lr, sig=self.sigma, downscale=4)
 
-        return pre_processed_image, torch.stack([vp_gt, ll_gt, lr_gt])
+        return pre_processed_image.to(self.device), torch.stack([vp_gt, ll_gt, lr_gt]).to(self.device)
 
 
 MLFLOW_CACHE_DIR = 'mlflow-cache/'
@@ -133,7 +134,8 @@ def test_main(run_id: str,
 
     model.eval()
     val_dataset = RowfollowValDataset(target_collection_path,
-                                      target_annotations_file_path)
+                                      target_annotations_file_path,
+                                      device)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=8, shuffle=False)
     total_loss = 0.0
     batches_processed = 0
