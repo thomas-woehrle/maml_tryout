@@ -73,6 +73,7 @@ class EnvConfig:
     device: torch.device
     data_dir: str
     do_use_mlflow: bool = False
+    # TODO add seeding
 
 
 def load_configuration(file_path: str) -> tuple[MamlHyperParameters, TrainConfig, EnvConfig, dict[str, Any]]:

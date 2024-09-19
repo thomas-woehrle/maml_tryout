@@ -19,6 +19,8 @@ class MamlTrainer(nn.Module):
                  sample_task: Callable[[maml_api.Stage], maml_api.MamlTask], model: maml_api.MamlModel,
                  device: torch.device, do_use_mlflow: bool,
                  train_config: maml_config.TrainConfig,
+                 calc_val_loss_fct: Callable[[int, maml_api.MamlModel,
+                                              maml_api.InnerBuffers, maml_api.InnerLrs, maml_logging.Logger], None],
                  *args, **kwargs):
         """
         Args:
@@ -31,6 +33,7 @@ class MamlTrainer(nn.Module):
             log_val_loss_every_n_episodes: Frequency of eval loss logging.
                                             First and last will always be logged. (Default: 100)
             log_model_every_n_episodes: Frequency of model logging. First and last will always be logged. (Default: 1000)
+            calc_val_loss_fct: Function which can be used to calculate the val loss at a given episode.
         """
         super().__init__(*args, **kwargs)
         self.hparams: maml_config.MamlHyperParameters = hparams
@@ -43,7 +46,6 @@ class MamlTrainer(nn.Module):
         self.log_val_loss_every_n_episodes: int = train_config.log_val_loss_every_n_episodes
         self.log_model_every_n_episodes: int = train_config.log_model_every_n_episodes
 
-        # TODO Parametrize the following 2 attributes
         # the first 10 percent of episodes will use strong multi-step loss updates, afterward weak
         self.multi_step_loss_n_episodes: int = int(hparams.n_episodes * hparams.msl_percentage_of_episodes) or 1
         # the first 30 percent of episodes will use first order updates
@@ -60,6 +62,7 @@ class MamlTrainer(nn.Module):
 
         self.current_episode: int = 0
         self.logger = maml_logging.Logger()
+        self.calc_val_loss_fct = calc_val_loss_fct
 
     def log_buffers(self, episode: int):
         for i in range(self.hparams.inner_steps):
@@ -192,18 +195,11 @@ class MamlTrainer(nn.Module):
 
                 # log eval_loss under condition
                 if episode % self.log_val_loss_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:
-                    end_params, _ = self.model.get_state()
-                    # TODO meta_buffers shouldn't be updated in this case inside meta_forward,
-                    #  but does not matter too much for now
-
-                    # Accumulate a val loss across n_val_iters times
-                    total_val_loss = torch.tensor(0.0, device=self.device)
-                    for i in range(self.n_val_iters):
-                        val_loss = self.meta_forward(end_params, buffers, maml_api.Stage.VAL)
-                        self.logger.log_metric(f"val_loss/ep{episode}", val_loss.item(), step=i)
-                        total_val_loss += val_loss
-
-                    self.logger.log_metric("avg_val_loss", total_val_loss.item() / self.n_val_iters, step=episode)
+                    self.calc_val_loss_fct(episode, self.model,
+                                           # turning int to str, because maml_eval expects this
+                                           # TODO prettify this
+                                           {str(n): b for n, b in self.inner_buffers.items()},
+                                           {n: t for n, t in self.inner_optimizer.names_lrs_dict.items()}, self.logger)
 
                 # log model under condition
                 if episode % self.log_model_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:

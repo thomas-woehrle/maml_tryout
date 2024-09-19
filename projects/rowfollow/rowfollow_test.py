@@ -11,6 +11,7 @@ import torch.utils.data
 
 import maml_api
 import maml_eval
+import maml_logging
 
 import rowfollow_task
 import rowfollow_utils
@@ -152,6 +153,43 @@ def test_main(run_id: str,
         mlflow.log_metric('final_avg_loss', total_loss / batches_processed)
 
     print('total loss: {}'.format(total_loss))
+
+
+def calc_val_loss_for_train(current_episode: int,
+                            model: maml_api.MamlModel,
+                            inner_buffers: maml_api.InnerBuffers,
+                            inner_lrs: maml_api.InnerLrs,
+                            k: int,
+                            inner_steps: int,
+                            support_collection_path: str,
+                            support_annotations_file_path: str,
+                            device: torch.device,
+                            seed: Optional[int],
+                            use_mlflow: bool,
+                            logger: maml_logging.Logger):
+    task = rowfollow_task.RowfollowTaskOldDataset(support_annotations_file_path,
+                                                  support_collection_path,
+                                                  k,
+                                                  device,
+                                                  seed=seed)
+
+    finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, inner_steps, task, use_mlflow=False)
+    finetuner.finetune()
+
+    model.eval()
+    val_dataset = RowfollowValDataset(support_collection_path,
+                                      support_annotations_file_path)
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=8, shuffle=False)
+    total_loss = 0.0
+    batches_processed = 0
+    for x, y in val_dataloader:
+        y_hat = model(x)
+        total_loss += task.calc_loss(y_hat, y, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET).item()
+        batches_processed += 1
+
+    if use_mlflow:
+        collection_name = support_collection_path.split('/')[-1]
+        logger.log_metric(f'{collection_name}_val_loss', total_loss / batches_processed, step=current_episode)
 
 
 @dataclass

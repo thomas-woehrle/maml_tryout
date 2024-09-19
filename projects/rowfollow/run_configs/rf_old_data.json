@@ -4,7 +4,7 @@
     "n_episodes": 2,
     "meta_batch_size": 4,
     "inner_steps": 1,
-    "k": 4,
+    "k": 1,
     "alpha": 0.4,
     "beta": 0.001,
     "min_beta": 0.00001
@@ -16,6 +16,7 @@
   },
   "other_config": {
     "sigma": 10,
-    "train_dataset_name": "early_and_late"
+    "train_dataset_name": "early_and_late",
+    "val_collections": ["collection-220620_164024", "collection-260620_160647", "ts_2021_09_17_11h44m52s-final-cam"]
   }
 }

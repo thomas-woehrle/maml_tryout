@@ -1,10 +1,11 @@
+import copy
 import os
 import random
-from typing import Any, Optional
+from typing import Any
 
 import mlflow
-import pandas as pd
 
+import maml_logging
 import maml_train
 import maml_api
 import maml_config
@@ -12,6 +13,7 @@ import maml_config
 import rowfollow_model
 import rowfollow_task
 import rowfollow_utils
+import rowfollow_test
 
 
 def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig,
@@ -58,7 +60,7 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
 
     val_data_path = os.path.join(env_config.data_dir, 'val')
     val_annotations = os.path.join(val_data_path, 'v2_annotations_val.csv')
-    val_collections = [os.path.join(val_data_path, d) for d in os.listdir(val_data_path)
+    val_collections = [os.path.join(val_data_path, d) for d in other_config['val_collections']
                        if os.path.isdir(os.path.join(val_data_path, d))]
 
     # save train and val bags
@@ -85,6 +87,20 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
                                                           env_config.device,
                                                           sigma=other_config['sigma'])
 
+    def calc_val_losses(current_episode: int, current_model: maml_api.MamlModel,
+                        current_inner_buffers: maml_api.InnerBuffers, current_lrs: maml_api.InnerLrs,
+                        logger: maml_logging.Logger):
+        for val_coll in val_collections:
+            current_model = copy.deepcopy(current_model).to(env_config.device)
+            current_lrs = copy.deepcopy(current_lrs)
+            current_inner_buffers = copy.deepcopy(current_inner_buffers)
+            # TODO is there another way instead of deepcopying ?
+            rowfollow_test.calc_val_loss_for_train(current_episode, current_model,
+                                                   current_inner_buffers, current_lrs,
+                                                   maml_hparams.k, maml_hparams.inner_steps,
+                                                   val_coll, val_annotations, env_config.device,
+                                                   seed=0, use_mlflow=True, logger=logger)
+
     model = rowfollow_model.RowfollowModel()
     model.to(env_config.device)
 
@@ -93,7 +109,8 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
                                      model=model,
                                      device=env_config.device,
                                      do_use_mlflow=env_config.do_use_mlflow,
-                                     train_config=train_config)
+                                     train_config=train_config,
+                                     calc_val_loss_fct=calc_val_losses)
     trainer.run_training()
 
 
