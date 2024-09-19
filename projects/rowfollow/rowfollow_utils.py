@@ -146,6 +146,15 @@ def get_train_data_paths(train_base_dir_path: str, dataset_name: str,
         # Get the 'collection_name' column as a list of strings
         collection_names = filtered_df['collection_name'].tolist()
         return [os.path.join(train_base_dir_path, cn) for cn in collection_names]
+    elif dataset_name == 'early_and_late':
+        df = pd.read_csv(dataset_info_path)
+
+        # Filter the rows where 'split' is 'train' and 'growth_stage' is 'early'
+        filtered_df = df[(df['split'] == 'train') & (df['growth_stage'].isin(['early', 'late']))]
+
+        # Get the 'collection_name' column as a list of strings
+        collection_names = filtered_df['collection_name'].tolist()
+        return [os.path.join(train_base_dir_path, cn) for cn in collection_names]
     elif dataset_name == 'all-season':
         return [os.path.join(train_base_dir_path, d) for d in os.listdir(train_base_dir_path)
                 if os.path.isdir(os.path.join(train_base_dir_path, d))]

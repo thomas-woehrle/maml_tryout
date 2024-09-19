@@ -16,6 +16,6 @@
   },
   "other_config": {
     "sigma": 10,
-    "train_dataset_name": "early"
+    "train_dataset_name": "early_and_late"
   }
 }
