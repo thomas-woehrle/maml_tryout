@@ -1,12 +1,13 @@
 {
-  "run_id": "2749cd39b76c4fe2b438716cf81aa3c3",
-  "episode": 19000,
+  "run_id": "b1dfed24fba443c6ac96b2c1b08c44d6",
+  "episode": 9000,
   "k": 8,
   "inner_steps": 3,
   "base_path": "/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/vision_data_latest",
-  "support_collection": "val/collection-260620_160647",
+  "support_collection": "val/ts_2021_09_17_11h44m52s-final-cam",
   "support_annotations_file_path": "val/v2_annotations_val.csv",
   "seed": 0,
   "device": "cpu",
-  "use_mlflow": false
+  "use_mlflow": false,
+  "sigma": 10
 }

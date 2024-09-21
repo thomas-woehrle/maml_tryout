@@ -1,7 +1,7 @@
 {
   "maml_hparams": {
     "use_anil": false,
-    "n_episodes": 2,
+    "n_episodes": 1,
     "meta_batch_size": 4,
     "inner_steps": 1,
     "k": 1,
@@ -16,7 +16,7 @@
   },
   "other_config": {
     "sigma": 10,
-    "train_dataset_name": "early_and_late",
-    "val_collections": ["collection-220620_164024", "collection-260620_160647", "ts_2021_09_17_11h44m52s-final-cam"]
+    "train_dataset_name": "early",
+    "val_collections": ["collection-220620_164024"]
   }
 }

@@ -200,7 +200,8 @@ class MamlFinetuner:
                  task: maml_api.MamlTask,
                  use_mlflow: bool = False
                  ):
-        self.model: maml_api.MamlModel = model
+        # put model into train mode
+        self.model: maml_api.MamlModel = model.train()
         self.inner_lrs: maml_api.InnerLrs = inner_lrs
         self.inner_buffers: maml_api.InnerBuffers = inner_buffers
         self.inner_steps: int = inner_steps

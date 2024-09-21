@@ -21,7 +21,8 @@ def main(run_id: str,
          support_annotations_file_path: str,
          target_directory: str,
          device: torch.device,
-         seed: Optional[int]):
+         seed: Optional[int],
+         sigma: int):
     model = load_model(run_id, episode)
     inner_lrs = load_inner_lrs(run_id, episode)
     inner_buffers = load_inner_buffers(run_id, episode)
@@ -30,6 +31,7 @@ def main(run_id: str,
                                                   support_collection_path,
                                                   k,
                                                   device,
+                                                  sigma=sigma,
                                                   seed=seed)
 
     finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, inner_steps, task)
@@ -57,18 +59,17 @@ def main(run_id: str,
 
 
 if __name__ == '__main__':
-    run_id = '2749cd39b76c4fe2b438716cf81aa3c3'
-    episode = 19000
+    run_id = 'b1dfed24fba443c6ac96b2c1b08c44d6'
+    episode = 9000
     k = 8
     inner_steps = 3
     base_path = '/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/vision_data_latest/'
-    support_collection_path = os.path.join(base_path, 'val', 'ts_2021_09_17_11h44m52s-final-cam')
-    support_annotations_file_path = os.path.join(base_path, 'val', 'v2_annotations_val.csv')
+    support_collection_path = os.path.join(base_path, 'train', 'late_season')
+    support_annotations_file_path = os.path.join(base_path, 'train', 'v2_annotations_train.csv')
     target_directory = support_collection_path
     device = torch.device('cpu')
     seed = 0
-
-    print(os.listdir(target_directory))
+    sigma = 10
 
     main(
         run_id,
@@ -79,5 +80,6 @@ if __name__ == '__main__':
         support_annotations_file_path,
         target_directory,
         device,
-        seed
+        seed,
+        sigma
     )

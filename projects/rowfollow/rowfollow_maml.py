@@ -91,15 +91,16 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
                         current_inner_buffers: maml_api.InnerBuffers, current_lrs: maml_api.InnerLrs,
                         logger: maml_logging.Logger):
         for val_coll in val_collections:
-            current_model = copy.deepcopy(current_model).to(env_config.device)
-            current_lrs = copy.deepcopy(current_lrs)
-            current_inner_buffers = copy.deepcopy(current_inner_buffers)
+            val_coll_model = copy.deepcopy(current_model).to(env_config.device)
+            val_coll_inner_lrs = copy.deepcopy(current_lrs)
+            val_coll_inner_buffers = copy.deepcopy(current_inner_buffers)
             # TODO is there another way instead of deepcopying ?
-            rowfollow_test.calc_val_loss_for_train(current_episode, current_model,
-                                                   current_inner_buffers, current_lrs,
+            rowfollow_test.calc_val_loss_for_train(current_episode, val_coll_model,
+                                                   val_coll_inner_buffers, val_coll_inner_lrs,
                                                    maml_hparams.k, maml_hparams.inner_steps,
                                                    val_coll, val_annotations, env_config.device,
-                                                   seed=0, use_mlflow=True, logger=logger)
+                                                   seed=0, use_mlflow=env_config.do_use_mlflow, logger=logger,
+                                                   sigma=other_config['sigma'])
 
     model = rowfollow_model.RowfollowModel()
     model.to(env_config.device)

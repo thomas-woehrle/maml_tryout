@@ -112,12 +112,17 @@ def test_main(run_id: str,
               target_annotations_file_path: str,
               device: torch.device,
               seed: Optional[int],
-              use_mlflow: bool):
+              use_mlflow: bool,
+              sigma: int):
 
     model = load_model(run_id, episode)
     inner_lrs = load_inner_lrs(run_id, episode)
     inner_buffers = load_inner_buffers(run_id, episode)
 
+    calc_val_loss_for_train(current_episode=-1, model=model, inner_lrs=inner_lrs, inner_buffers=inner_buffers, k=k, inner_steps=inner_steps, support_collection_path=support_collection_path, support_annotations_file_path=support_annotations_file_path, device=device, seed=seed, use_mlflow=False, logger=None, sigma=sigma)
+    return
+
+    # TODO clean-up
     task = rowfollow_task.RowfollowTaskOldDataset(support_annotations_file_path,
                                                   support_collection_path,
                                                   k,
@@ -168,12 +173,14 @@ def calc_val_loss_for_train(current_episode: int,
                             device: torch.device,
                             seed: Optional[int],
                             use_mlflow: bool,
-                            logger: maml_logging.Logger):
+                            logger: maml_logging.Logger,
+                            sigma: int):
     task = rowfollow_task.RowfollowTaskOldDataset(support_annotations_file_path,
                                                   support_collection_path,
                                                   k,
                                                   device,
-                                                  seed=seed)
+                                                  seed=seed,
+                                                  sigma=sigma)
 
     finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, inner_steps, task, use_mlflow=False)
     finetuner.finetune()
@@ -188,10 +195,14 @@ def calc_val_loss_for_train(current_episode: int,
         y_hat = model(x)
         total_loss += task.calc_loss(y_hat, y, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET).item()
         batches_processed += 1
+        print('avg_loss:', total_loss / batches_processed)
 
     if use_mlflow:
         collection_name = support_collection_path.split('/')[-1]
         logger.log_metric(f'{collection_name}_val_loss', total_loss / batches_processed, step=current_episode)
+
+    collection_name = support_collection_path.split('/')[-1]
+    print(f'{collection_name}_val_loss', total_loss / batches_processed)
 
 
 @dataclass
@@ -212,6 +223,7 @@ class TestConfig:
     dataset_info_path: Optional[str] = None
     use_mlflow: bool = False
     mlflow_experiment: Optional[str] = None
+    sigma: int = 10
 
 
 def run_main_from_test_config(test_config: TestConfig):
@@ -255,7 +267,8 @@ def run_main_from_test_config(test_config: TestConfig):
               target_annotations_file_path=target_annotations_file_path,
               device=torch.device(test_config.device),
               seed=test_config.seed,
-              use_mlflow=test_config.use_mlflow)
+              use_mlflow=test_config.use_mlflow,
+              sigma=test_config.sigma)
 
     mlflow.end_run()
 
