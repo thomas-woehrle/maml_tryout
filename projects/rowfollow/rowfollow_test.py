@@ -13,6 +13,7 @@ import maml_api
 import maml_eval
 import maml_logging
 
+import rowfollow_model
 import rowfollow_task
 import rowfollow_utils
 
@@ -102,64 +103,53 @@ def load_inner_buffers(run_id: str, episode: int) -> maml_api.InnerBuffers:
     return inner_buffers
 
 
-def test_main(run_id: str,
-              episode: int,
-              k: int,
-              inner_steps: int,
-              support_collection_path: str,
-              support_annotations_file_path: str,
-              target_collection_path: str,
-              target_annotations_file_path: str,
-              device: torch.device,
-              seed: Optional[int],
-              use_mlflow: bool,
-              sigma: int):
+@dataclass
+class TestConfig:
+    run_id: str
+    episode: int
+    k: int
+    inner_steps: int
+    base_path: str
+    support_collection_path: str
+    support_annotations_file_path: str
+    seed: Optional[int]
+    device: str
+    target_collection: Optional[str] = None
+    target_annotations_file_path: Optional[str] = None
+    # only asl-then-0.5 can be used atm
+    lr_strategy: str = 'asl-then-0.5'  # possible values in the future: asl-then-0.5, 0.5-then-0.5, asl-then-anneal
+    dataset_info_path: Optional[str] = None
+    use_mlflow: bool = False
+    mlflow_experiment: Optional[str] = None
+    sigma: int = 10
+    path_to_ckpt_file: Optional[str] = None
 
-    model = load_model(run_id, episode)
-    inner_lrs = load_inner_lrs(run_id, episode)
-    inner_buffers = load_inner_buffers(run_id, episode)
 
-    calc_val_loss_for_train(current_episode=-1, model=model, inner_lrs=inner_lrs, inner_buffers=inner_buffers, k=k, inner_steps=inner_steps, support_collection_path=support_collection_path, support_annotations_file_path=support_annotations_file_path, device=device, seed=seed, use_mlflow=False, logger=None, sigma=sigma)
-    return
+def test_main(config: TestConfig):
+    if config.path_to_ckpt_file is None:
+        model = load_model(config.run_id, config.episode)
+        inner_lrs = load_inner_lrs(config.run_id, config.episode)
+        inner_buffers = load_inner_buffers(config.run_id, config.episode)
 
-    # TODO clean-up
-    task = rowfollow_task.RowfollowTaskOldDataset(support_annotations_file_path,
-                                                  support_collection_path,
-                                                  k,
-                                                  device,
-                                                  seed=seed)
+        calc_val_loss_for_train(current_episode=-1, model=model, inner_lrs=inner_lrs, inner_buffers=inner_buffers,
+                                k=config.k, inner_steps=config.inner_steps,
+                                support_collection_path=config.support_collection_path,
+                                support_annotations_file_path=config.support_annotations_file_path,
+                                device=torch.device(config.device), seed=config.seed, use_mlflow=False,
+                                logger=None, sigma=config.sigma)
 
-    finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, inner_steps, task, use_mlflow)
-    finetuner.finetune()  # TODO add do_finetune parameter to train_config
+    else:
+        model = get_model_from_ckpt_file(config.path_to_ckpt_file)
+        model.eval()
+        task = rowfollow_task.RowfollowTaskOldDataset(config.support_annotations_file_path,
+                                                      config.support_collection_path,
+                                                      config.k,
+                                                      torch.device(config.device),
+                                                      seed=config.seed,
+                                                      sigma=config.sigma)
 
-    if use_mlflow:
-        print('Uploading model to mlflow server...')
-        example_x = task.sample(maml_api.SetToSetType.SUPPORT)[0].cpu().numpy()
-        mlflow.pytorch.log_model(model, 'finetuned_model', input_example=example_x)
-
-    model.eval()
-    val_dataset = RowfollowValDataset(target_collection_path,
-                                      target_annotations_file_path,
-                                      device)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=8, shuffle=False)
-    total_loss = 0.0
-    batches_processed = 0
-    for x, y in val_dataloader:
-        y_hat = model(x)
-        total_loss += task.calc_loss(y_hat, y, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET).item()
-        batches_processed += 1
-        print('total_loss:', total_loss)
-        print('avg_loss:', total_loss / batches_processed)
-
-        if use_mlflow:
-            mlflow.log_metric('total_loss', total_loss, batches_processed)
-            mlflow.log_metric('avg_loss', total_loss / batches_processed, batches_processed)
-
-    if use_mlflow:
-        mlflow.log_metric('final_total_loss', total_loss)
-        mlflow.log_metric('final_avg_loss', total_loss / batches_processed)
-
-    print('total loss: {}'.format(total_loss))
+        calc_loss(config.support_collection_path, config.support_annotations_file_path, torch.device(config.device),
+                  model, task, None, False, -1)
 
 
 def calc_val_loss_for_train(current_episode: int,
@@ -186,8 +176,22 @@ def calc_val_loss_for_train(current_episode: int,
     finetuner.finetune()
 
     model.eval()
-    val_dataset = RowfollowValDataset(support_collection_path,
-                                      support_annotations_file_path, device=device)
+
+    calc_loss(target_collection_path=support_collection_path,
+              target_annotations_file_path=support_annotations_file_path,
+              device=device,
+              model=model,
+              task=task,
+              logger=logger,
+              use_mlflow=use_mlflow,
+              current_episode=current_episode)
+
+
+def calc_loss(target_collection_path: str, target_annotations_file_path: str, device: torch.device,
+              model: maml_api.MamlModel, task: maml_api.MamlTask,
+              logger: maml_logging.Logger, use_mlflow: bool, current_episode: int):
+    val_dataset = RowfollowValDataset(target_collection_path,
+                                      target_annotations_file_path, device=device)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=8, shuffle=False)
     total_loss = 0.0
     batches_processed = 0
@@ -198,79 +202,21 @@ def calc_val_loss_for_train(current_episode: int,
         print('avg_loss:', total_loss / batches_processed)
 
     if use_mlflow:
-        collection_name = support_collection_path.split('/')[-1]
+        collection_name = target_collection_path.split('/')[-1]
         logger.log_metric(f'{collection_name}_val_loss', total_loss / batches_processed, step=current_episode)
 
-    collection_name = support_collection_path.split('/')[-1]
+    collection_name = target_collection_path.split('/')[-1]
     print(f'{collection_name}_val_loss', total_loss / batches_processed)
 
 
-@dataclass
-class TestConfig:
-    run_id: str
-    episode: int
-    k: int
-    inner_steps: int
-    base_path: str
-    support_collection: str
-    support_annotations_file_path: str
-    seed: Optional[int]
-    device: str
-    target_collection: Optional[str] = None
-    target_annotations_file_path: Optional[str] = None
-    # only asl-then-0.5 can be used atm
-    lr_strategy: str = 'asl-then-0.5'  # possible values in the future: asl-then-0.5, 0.5-then-0.5, asl-then-anneal
-    dataset_info_path: Optional[str] = None
-    use_mlflow: bool = False
-    mlflow_experiment: Optional[str] = None
-    sigma: int = 10
+def get_model_from_ckpt_file(path_to_ckpt_file: str):
+    print('Loading model from file at:', path_to_ckpt_file)
+    ckpt = torch.load(path_to_ckpt_file, map_location=torch.device('cpu'))
 
+    model = rowfollow_model.RowfollowModel()
+    model.load_state_dict(ckpt)
 
-def run_main_from_test_config(test_config: TestConfig):
-    support_collection_path = os.path.join(test_config.base_path, test_config.support_collection)
-    support_annotations_file_path = os.path.join(test_config.base_path, test_config.support_annotations_file_path)
-    if test_config.target_collection is None:
-        target_collection_path = support_collection_path
-    else:
-        target_collection_path = os.path.join(test_config.base_path, test_config.target_collection)
-
-    if test_config.target_annotations_file_path is None:
-        target_annotations_file_path = support_annotations_file_path
-    else:
-        target_annotations_file_path = os.path.join(test_config.base_path, test_config.target_annotations_file_path)
-
-    if test_config.use_mlflow:
-        print('Setting up mlflow run...')
-        if test_config.mlflow_experiment is None:
-            mlflow.set_experiment(f'/run({test_config.run_id})-val')
-        else:
-            mlflow.set_experiment(test_config.mlflow_experiment)
-        mlflow.start_run()
-
-        mlflow.log_params(vars(test_config))
-        mlflow.log_dict(vars(test_config), 'test_config.json')
-        data_info = {
-            'support_collection': support_collection_path,
-            'target_collection': target_collection_path
-        }
-        mlflow.log_dict(data_info, 'data_info.json')
-        print('Finished setting up mlflow run.')
-
-    test_main(run_id=test_config.run_id,
-              episode=test_config.episode,
-              k=test_config.k,
-              inner_steps=test_config.inner_steps,
-              support_collection_path=support_collection_path,
-              support_annotations_file_path=os.path.join(test_config.base_path,
-                                                         test_config.support_annotations_file_path),
-              target_collection_path=target_collection_path,
-              target_annotations_file_path=target_annotations_file_path,
-              device=torch.device(test_config.device),
-              seed=test_config.seed,
-              use_mlflow=test_config.use_mlflow,
-              sigma=test_config.sigma)
-
-    mlflow.end_run()
+    return model
 
 
 def get_config_from_file(path: str) -> TestConfig:
@@ -278,6 +224,10 @@ def get_config_from_file(path: str) -> TestConfig:
         config_dict = json.load(f)
         test_config = TestConfig(**config_dict)
         test_config.dataset_info_path = os.path.join(test_config.base_path, 'dataset_info.csv')
+        test_config.support_collection_path = os.path.join(test_config.base_path,
+                                                           test_config.support_collection_path)
+        test_config.support_annotations_file_path = os.path.join(test_config.base_path,
+                                                                 test_config.support_annotations_file_path)
         return test_config
 
 
@@ -291,4 +241,4 @@ if __name__ == '__main__':
         sys.exit(1)
 
     path_to_config = sys.argv[1]
-    run_main_from_test_config(get_config_from_file(path_to_config))
+    test_main(get_config_from_file(path_to_config))
