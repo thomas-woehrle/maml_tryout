@@ -71,6 +71,9 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
         }
         mlflow.log_dict(data_info_dict, 'data_info.json')
 
+    if env_config.seed is not None:
+        maml_train.set_seed(env_config.seed)
+
     def sample_task(training_stage: maml_api.Stage):
         if training_stage == maml_api.Stage.TRAIN:
             support_data_path = random.choice(train_collections)
@@ -90,6 +93,15 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
     def calc_val_losses(current_episode: int, current_model: maml_api.MamlModel,
                         current_inner_buffers: maml_api.InnerBuffers, current_lrs: maml_api.InnerLrs,
                         logger: maml_logging.Logger):
+        # get state and reassign it later. Done, because seed is set inside val_loss calculation
+        random_prior_state = random.getstate()
+
+        # see the documentation of maml_config.EnvConfig
+        if env_config.use_same_val_seed_for_all_episodes:
+            val_seed = env_config.seed or 0
+        else:
+            val_seed = current_episode + (env_config.seed or 0)
+
         for val_coll in val_collections:
             val_coll_model = copy.deepcopy(current_model).to(env_config.device)
             val_coll_inner_lrs = copy.deepcopy(current_lrs)
@@ -99,8 +111,11 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
                                                    val_coll_inner_buffers, val_coll_inner_lrs,
                                                    maml_hparams.k, maml_hparams.inner_steps,
                                                    val_coll, val_annotations, env_config.device,
-                                                   seed=0, use_mlflow=env_config.do_use_mlflow, logger=logger,
+                                                   seed=val_seed, use_mlflow=env_config.do_use_mlflow, logger=logger,
                                                    sigma=other_config['sigma'])
+
+        # reassign prior random state
+        random.setstate(random_prior_state)
 
     model = rowfollow_model.RowfollowModel()
     model.to(env_config.device)

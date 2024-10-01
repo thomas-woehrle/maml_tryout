@@ -1,4 +1,5 @@
 import copy
+import random
 from typing import Callable
 
 import numpy as np
@@ -12,6 +13,23 @@ import maml_api
 import maml_config
 import maml_inner_optimizers
 import maml_logging
+
+
+def set_seed(seed: int):
+    # Python's built-in random module
+    random.seed(seed)
+
+    # NumPy
+    np.random.seed(seed)
+
+    # PyTorch
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # For multi-GPU setups
+
+    # PyTorch Backends
+    torch.backends.cudnn.deterministic = True  # Forces deterministic behavior
+    torch.backends.cudnn.benchmark = False
 
 
 class MamlTrainer(nn.Module):
@@ -46,9 +64,9 @@ class MamlTrainer(nn.Module):
         self.log_val_loss_every_n_episodes: int = train_config.log_val_loss_every_n_episodes
         self.log_model_every_n_episodes: int = train_config.log_model_every_n_episodes
 
-        # the first 10 percent of episodes will use strong multi-step loss updates, afterward weak
+        # number of episodes that will use strong multi-step loss updates, afterward weak
         self.multi_step_loss_n_episodes: int = int(hparams.n_episodes * hparams.msl_percentage_of_episodes) or 1
-        # the first 30 percent of episodes will use first order updates
+        # number of episodes that will use first order updates
         self.first_order_updates_n_episodes: int = int(hparams.n_episodes *
                                                        hparams.first_order_percentage_of_episodes) or 1
 

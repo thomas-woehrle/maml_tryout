@@ -1,7 +1,7 @@
 import argparse
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 import torch
 
@@ -69,11 +69,20 @@ class EnvConfig:
         device: A torch.device.
         data_dir: The path to the data to be used.
         do_use_mlflow: Indicates whether to use MLFlow tracking or not.
+        seed: Seed to be used for training. If this is None, then no seed is used.
+        use_same_val_seed_for_all_episodes: Indicates whether to always use same seed for validation loss.
+            If this is true, the seed used in the calculation of the val_loss at episode should be  EnvConfig.seed or 0,
+            if EnvConfig.seed is None.
+            If this is false, the seed used to calculate the val_loss at episode x should be x + EnvConfig.seed
+            or x if EnvConfig.seed is None.
+            This means that in any case, the seed used to calculate the val_loss at episode x can be inferred afterward 
+            if one knows the hyperparameters.
     """
     device: torch.device
     data_dir: str
     do_use_mlflow: bool = False
-    # TODO add seeding
+    seed: Optional[int] = None
+    use_same_val_seed_for_all_episodes: bool = True
 
 
 def load_configuration(file_path: str) -> tuple[MamlHyperParameters, TrainConfig, EnvConfig, dict[str, Any]]:
