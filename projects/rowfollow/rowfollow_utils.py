@@ -132,11 +132,26 @@ def get_train_data_paths(train_base_dir_path: str, dataset_name: str,
     Returns:
         List of paths to training data folders making up the desired dataset.
     """
-    if dataset_name == 'early_and_very_late':
+    if dataset_name == 'some_name':
+        ...
+    elif dataset_name == 'all_subset1':
+        colls_early = ['collection-150620', '06_15_June15th_Autonomous_farm']
+        colls_late = ['collection-260620_161030', '46e96336-4878-45b4-bdb1-d6d3ee61ae5a']
+        colls_very_late = ['late_season']
+        all_colls = colls_early + colls_late + colls_very_late
+        return [os.path.join(train_base_dir_path, col) for col in all_colls]
+    elif dataset_name == 'early_and_very_late':
         col_early_1 = os.path.join(train_base_dir_path, 'collection-150620')
         col_early_2 = os.path.join(train_base_dir_path, '06_15_June15th_Autonomous_farm')
         col_late = os.path.join(train_base_dir_path, 'late_season')
         return [col_early_1, col_early_2, col_late]
+    elif dataset_name == 'early_subset1':
+        col_early = os.path.join(train_base_dir_path, 'collection-150620')
+        return [col_early]
+    elif dataset_name == 'early_subset2':
+        colls = ['collection-190620_164740', 'collection-190620_170034', 'collection-190620_172602',
+                 'collection-190620_172956', 'collection-190620_173247', 'collection-190620_173536']
+        return [os.path.join(train_base_dir_path, col) for col in colls]
     elif dataset_name == 'early':
         df = pd.read_csv(dataset_info_path)
 
