@@ -109,7 +109,7 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
             # TODO is there another way instead of deepcopying ?
             rowfollow_test.calc_val_loss_for_train(current_episode, val_coll_model,
                                                    val_coll_inner_buffers, val_coll_inner_lrs,
-                                                   maml_hparams.k, maml_hparams.inner_steps,
+                                                   maml_hparams.k, maml_hparams.inner_steps, maml_hparams.use_anil,
                                                    val_coll, val_annotations, env_config.device,
                                                    seed=val_seed, use_mlflow=env_config.do_use_mlflow, logger=logger,
                                                    sigma=other_config['sigma'])

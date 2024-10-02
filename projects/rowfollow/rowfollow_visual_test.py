@@ -29,7 +29,7 @@ def main(config: TestConfig):
                                                   seed=config.seed)
 
     if config.path_to_ckpt_file is None:
-        finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, config.inner_steps, task)
+        finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, config.inner_steps, task, config.use_anil)
         finetuner.finetune()
 
     model.eval()

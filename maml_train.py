@@ -132,7 +132,6 @@ class MamlTrainer(nn.Module):
     def inner_step(self, x_support: torch.Tensor, y_support: torch.Tensor,
                    params: maml_api.NamedParams, task: maml_api.MamlTask,
                    num_step: int, stage: maml_api.Stage) -> maml_api.NamedParams:
-        # TODO add anil back
         y_hat = self.model.func_forward(x_support, params, self.inner_buffers[num_step])
         train_loss = task.calc_loss(y_hat, y_support, stage, maml_api.SetToSetType.SUPPORT)
 
@@ -141,16 +140,33 @@ class MamlTrainer(nn.Module):
                                                      or self.current_episode > self.first_order_updates_n_episodes)
         self.logger.log_metric("second_order_true", int(use_second_order), self.current_episode)
 
-        grads = autograd.grad(train_loss, params.values(),
-                              create_graph=use_second_order)
+        if self.hparams.use_anil:
+            # assumes that head is assigned via self.head = ...
+            head = {n: p for n, p in params.items() if n.startswith('head')}
 
-        # update params
-        if self.hparams.use_lslr:
-            names_grads_dict = dict(zip(params.keys(), grads))
-            return self.inner_optimizer.update_params(params, names_grads_dict, num_step)
+            # get grads only wrt head
+            head_grads = autograd.grad(
+                train_loss, head.values(), create_graph=use_second_order)
+
+            # do update only for head
+            if self.hparams.use_lslr:
+                names_head_grads_dict = dict(zip(head.keys(), head_grads))
+                # inner_optimizer.update_params does not care about anil or no-anil
+                head_i = self.inner_optimizer.update_params(head, names_head_grads_dict, num_step)
+                return {**params, **head_i}  # old params, with only head replaced
+            else:
+                head_i = {n: p - self.hparams.alpha * g for (n, p), g in zip(head.items(), head_grads)}
+                return {**params, **head_i}
         else:
-            return {n: p - self.hparams.alpha *
-                           g for (n, p), g in zip(params.items(), grads)}
+            grads = autograd.grad(train_loss, params.values(),
+                                  create_graph=use_second_order)
+
+            # update params
+            if self.hparams.use_lslr:
+                names_grads_dict = dict(zip(params.keys(), grads))
+                return self.inner_optimizer.update_params(params, names_grads_dict, num_step)
+            else:
+                return {n: p - self.hparams.alpha * g for (n, p), g in zip(params.items(), grads)}
 
     def meta_forward(self, params: maml_api.NamedParams, buffers: maml_api.NamedBuffers, stage: maml_api.Stage):
         """Does a meta forward pass
@@ -191,6 +207,7 @@ class MamlTrainer(nn.Module):
                                                                 eta_min=self.hparams.min_beta)
         for episode in range(self.hparams.n_episodes):
             # self.log_buffers(episode)
+            # self.inner_optimizer.log_lrs(episode, self.logger)
             self.current_episode = episode
             optimizer.zero_grad()
             params, buffers = self.model.get_state()

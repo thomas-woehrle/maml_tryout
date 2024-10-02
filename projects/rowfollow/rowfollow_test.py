@@ -109,6 +109,7 @@ class TestConfig:
     episode: int
     k: int
     inner_steps: int
+    use_anil: bool
     base_path: str
     support_collection_path: str
     support_annotations_file_path: str
@@ -132,7 +133,7 @@ def test_main(config: TestConfig):
         inner_buffers = load_inner_buffers(config.run_id, config.episode)
 
         calc_val_loss_for_train(current_episode=-1, model=model, inner_lrs=inner_lrs, inner_buffers=inner_buffers,
-                                k=config.k, inner_steps=config.inner_steps,
+                                k=config.k, inner_steps=config.inner_steps, use_anil=config.use_anil,
                                 support_collection_path=config.support_collection_path,
                                 support_annotations_file_path=config.support_annotations_file_path,
                                 device=torch.device(config.device), seed=config.seed, use_mlflow=False,
@@ -158,6 +159,7 @@ def calc_val_loss_for_train(current_episode: int,
                             inner_lrs: maml_api.InnerLrs,
                             k: int,
                             inner_steps: int,
+                            use_anil: bool,
                             support_collection_path: str,
                             support_annotations_file_path: str,
                             device: torch.device,
@@ -172,7 +174,7 @@ def calc_val_loss_for_train(current_episode: int,
                                                   seed=seed,
                                                   sigma=sigma)
 
-    finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, inner_steps, task, use_mlflow=False)
+    finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, inner_steps, task, use_anil, use_mlflow=False)
     finetuner.finetune()
 
     model.eval()

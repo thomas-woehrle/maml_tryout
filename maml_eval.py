@@ -198,6 +198,7 @@ class MamlFinetuner:
                  inner_buffers: maml_api.InnerBuffers,
                  inner_steps: int,
                  task: maml_api.MamlTask,
+                 use_anil: bool,
                  use_mlflow: bool = False
                  ):
         # put model into train mode
@@ -207,6 +208,7 @@ class MamlFinetuner:
         self.inner_steps: int = inner_steps
         self.task: maml_api.MamlTask = task
         self.use_mlflow: bool = use_mlflow
+        self.use_anil: bool = use_anil
 
     def inner_step(self, x_support: torch.Tensor, y_support: torch.Tensor,
                    params: maml_api.NamedParams,
@@ -220,13 +222,23 @@ class MamlFinetuner:
         if self.use_mlflow:
             mlflow.log_metric('train_loss', train_loss.item(), num_step)
 
-        grads = autograd.grad(train_loss, params.values(), create_graph=False)
-
         # TODO implement different learning rate strategies
-        # after the number of learned steps, the learning rate of the last step is halved
+        # if num_step > learned steps, the learning rate of the last step is halved and used as lr
         factor = 1 if capped_num_step == num_step else 0.5
-        return {n: p - factor * self.inner_lrs[n.replace('.', '-')][capped_num_step] * g
-                for (n, p), g in zip(params.items(), grads)}
+
+        if self.use_anil:
+            # assumes that head is assigned via self.head = ...
+            head = {n: p for n, p in params.items() if n.startswith('head')}
+            head_grads = autograd.grad(
+                train_loss, head.values(), create_graph=False)
+            head_i = {n: p - factor * self.inner_lrs[n.replace('.', '-')][capped_num_step] * g
+                      for (n, p), g in zip(head.items(), head_grads)}
+            return {**params, **head_i}
+        else:
+            grads = autograd.grad(train_loss, params.values(), create_graph=False)
+
+            return {n: p - factor * self.inner_lrs[n.replace('.', '-')][capped_num_step] * g
+                    for (n, p), g in zip(params.items(), grads)}
 
     def finetune(self):
         """Finetunes self.model using the given (x, y)
