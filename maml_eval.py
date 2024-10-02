@@ -201,8 +201,8 @@ class MamlFinetuner:
                  use_anil: bool,
                  use_mlflow: bool = False
                  ):
-        # put model into train mode
-        self.model: maml_api.MamlModel = model.train()
+        # The model has to be in eval() mode for inner buffers to be used.
+        self.model: maml_api.MamlModel = model.eval()
         self.inner_lrs: maml_api.InnerLrs = inner_lrs
         self.inner_buffers: maml_api.InnerBuffers = inner_buffers
         self.inner_steps: int = inner_steps

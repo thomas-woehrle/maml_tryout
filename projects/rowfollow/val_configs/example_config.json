@@ -1,15 +1,18 @@
 {
-  "run_id": "dc8026e6473c4b0fbeb1d3ab48dc07f0",
-  "episode": 5000,
+  "run_id": "ff61f9ef40aa423980499af20c6b28f2",
+  "episode": 19999,
   "k": 5,
-  "inner_steps": 0,
+  "inner_steps": 3,
   "use_anil": false,
-  "base_path": "/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/vision_data_latest",
-  "support_collection_path": "val/collection-260620_160647",
-  "support_annotations_file_path": "val/v2_annotations_val.csv",
+  "base_path": "/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/vision_data_latest/val",
+  "loss_calc_info": {
+    "late23_loss": {
+      "collections": ["collection-100720_191851"],
+      "num_iterations": 5
+    }
+  },
+  "annotations_file_path": "v2_annotations_val.csv",
   "seed": 0,
   "device": "cpu",
-  "use_mlflow": false,
-  "sigma": 10,
-  "path_to_ckpt_file": null
+  "sigma": 10
 }
