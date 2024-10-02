@@ -17,10 +17,18 @@
   },
   "other_config": {
     "sigma": 10,
-    "train_dataset_name": "early",
+    "train_dataset_name": "all-season",
     "loss_calc_info": {
-      "late23_loss": {
-        "collections": ["collection-100720_191851"],
+      "early_val_loss": {
+        "collections": ["collection-020720_183327", "collection-220620_164024", "collection-260620_191551"],
+        "num_iterations": 5
+      },
+      "late_val_loss": {
+        "collections": ["collection-260620_160647"],
+        "num_iterations": 5
+      },
+      "very_late_val_loss": {
+        "collections": ["ts_2021_09_17_11h44m52s-final-cam"],
         "num_iterations": 5
       }
     }

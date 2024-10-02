@@ -60,7 +60,6 @@ class MamlTrainer(nn.Module):
         self.device: torch.device = device
         self.do_use_mlflow: bool = do_use_mlflow  # TODO remove
 
-        self.n_val_iters: int = train_config.n_val_iters
         self.log_val_loss_every_n_episodes: int = train_config.log_val_loss_every_n_episodes
         self.log_model_every_n_episodes: int = train_config.log_model_every_n_episodes
 

@@ -231,18 +231,19 @@ def calc_loss_for_one_collection(
         task: maml_api.MamlTask,
         device: torch.device,
 ) -> tuple[float, int]:
-    val_dataset = RowfollowValDataset(collection_path,
-                                      annotations_file_path, device=device)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=8, shuffle=False)
-    total_loss = 0.0
-    batches_processed = 0
-    for x, y in val_dataloader:
-        y_hat = model(x)
-        total_loss += task.calc_loss(y_hat, y, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET).item()
-        batches_processed += 1
-        print('Current loss:', total_loss / batches_processed)
+    with torch.no_grad():
+        val_dataset = RowfollowValDataset(collection_path,
+                                          annotations_file_path, device=device)
+        val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=8, shuffle=False)
+        total_loss = 0.0
+        batches_processed = 0
+        for x, y in val_dataloader:
+            y_hat = model(x)
+            total_loss += task.calc_loss(y_hat, y, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET).item()
+            batches_processed += 1
+            print('Current loss:', total_loss / batches_processed)
 
-    return total_loss / batches_processed, batches_processed
+        return total_loss / batches_processed, batches_processed
 
 
 def evaluate_from_config(config: TestConfig):

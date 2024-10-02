@@ -57,7 +57,6 @@ class TrainConfig:
     """
     log_model_every_n_episodes: int = 1000
     log_val_loss_every_n_episodes: int = 500
-    n_val_iters: int = 100
 
 
 @dataclass
