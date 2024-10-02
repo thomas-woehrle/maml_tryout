@@ -16,40 +16,7 @@ import rowfollow_utils
 import rowfollow_test
 
 
-def main(maml_hparams: maml_config.MamlHyperParameters, env_config: maml_config.EnvConfig,
-         other_config: dict[str, Any]):
-    # add test_bags ?
-    train_bags, val_bags = rowfollow_utils.get_train_and_test_bags(
-        env_config.data_dir, 4, 5)
-
-    # save train and val bags
-    if env_config.do_use_mlflow:
-        bags_dict = {
-            "train_bags": train_bags,
-            "val_bags": val_bags
-        }
-        mlflow.log_dict(bags_dict, 'bags.json')
-
-    def sample_task(training_stage: maml_api.Stage):
-        if training_stage == maml_api.Stage.TRAIN:
-            return rowfollow_task.RowfollowTask(random.choice(train_bags),
-                                                maml_hparams.k, env_config.device, sigma=other_config['sigma'])
-        if training_stage == maml_api.Stage.VAL:
-            return rowfollow_task.RowfollowTask(random.choice(val_bags),
-                                                maml_hparams.k, env_config.device, sigma=other_config['sigma'])
-
-    model = rowfollow_model.RowfollowModel()
-    model.to(env_config.device)
-
-    trainer = maml_train.MamlTrainer(hparams=maml_hparams,
-                                     sample_task=sample_task,
-                                     model=model,
-                                     device=env_config.device,
-                                     do_use_mlflow=env_config.do_use_mlflow)
-    trainer.run_training()
-
-
-def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: maml_config.TrainConfig,
+def main(maml_hparams: maml_config.MamlHyperParameters, train_config: maml_config.TrainConfig,
                   env_config: maml_config.EnvConfig, other_config: dict[str, Any]):
     dataset_info_path = os.path.join(env_config.data_dir, 'dataset_info.csv')
 
@@ -60,14 +27,15 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
 
     val_data_path = os.path.join(env_config.data_dir, 'val')
     val_annotations = os.path.join(val_data_path, 'v2_annotations_val.csv')
-    val_collections = [os.path.join(val_data_path, d) for d in other_config['val_collections']
-                       if os.path.isdir(os.path.join(val_data_path, d))]
+
+    # after this other_config['loss_calc_info'] is converted to the right format
+    rowfollow_test.convert_dict_to_loss_calculation_info(other_config, env_config.data_dir + '/val')
 
     # save train and val bags
     if env_config.do_use_mlflow:
         data_info_dict = {
             "train_collections": train_collections,
-            "val_collections": val_collections
+            "loss_calculations": other_config['loss_calc_info'],
         }
         mlflow.log_dict(data_info_dict, 'data_info.json')
 
@@ -78,13 +46,6 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
         if training_stage == maml_api.Stage.TRAIN:
             support_data_path = random.choice(train_collections)
             return rowfollow_task.RowfollowTaskOldDataset(train_annotations,
-                                                          support_data_path,
-                                                          maml_hparams.k,
-                                                          env_config.device,
-                                                          sigma=other_config['sigma'])
-        if training_stage == maml_api.Stage.VAL:
-            support_data_path = random.choice(val_collections)
-            return rowfollow_task.RowfollowTaskOldDataset(val_annotations,
                                                           support_data_path,
                                                           maml_hparams.k,
                                                           env_config.device,
@@ -102,17 +63,27 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
         else:
             val_seed = current_episode + (env_config.seed or 0)
 
-        for val_coll in val_collections:
-            val_coll_model = copy.deepcopy(current_model).to(env_config.device)
-            val_coll_inner_lrs = copy.deepcopy(current_lrs)
-            val_coll_inner_buffers = copy.deepcopy(current_inner_buffers)
-            # TODO is there another way instead of deepcopying ?
-            rowfollow_test.calc_val_loss_for_train(current_episode, val_coll_model,
-                                                   val_coll_inner_buffers, val_coll_inner_lrs,
-                                                   maml_hparams.k, maml_hparams.inner_steps, maml_hparams.use_anil,
-                                                   val_coll, val_annotations, env_config.device,
-                                                   seed=val_seed, use_mlflow=env_config.do_use_mlflow, logger=logger,
-                                                   sigma=other_config['sigma'])
+        current_model = copy.deepcopy(current_model).to(env_config.device)
+        current_inner_lrs = copy.deepcopy(current_lrs)
+        current_inner_buffers = copy.deepcopy(current_inner_buffers)
+        loss_calculator = rowfollow_test.RowfollowMamlLossCalculator(
+            current_episode=current_episode,
+            base_model=current_model,
+            inner_buffers=current_inner_buffers,
+            inner_lrs=current_inner_lrs,
+            k=maml_hparams.k,
+            inner_steps=maml_hparams.inner_steps,
+            use_anil=maml_hparams.use_anil,
+            sigma=other_config['sigma'],
+            loss_calc_info=other_config['loss_calc_info'],
+            annotations_file_path=val_annotations,
+            device=env_config.device,
+            base_seed=val_seed,
+            use_mlflow=env_config.do_use_mlflow,
+            logger=logger
+        )
+
+        loss_calculator.calc_losses()
 
         # reassign prior random state
         random.setstate(random_prior_state)
@@ -131,4 +102,4 @@ def main_old_data(maml_hparams: maml_config.MamlHyperParameters, train_config: m
 
 
 if __name__ == '__main__':
-    main_old_data(*maml_config.parse_maml_args())
+    main(*maml_config.parse_maml_args())

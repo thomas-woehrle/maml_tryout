@@ -281,20 +281,24 @@ def get_model_from_ckpt_file(path_to_ckpt_file: str):
     return model
 
 
+def convert_dict_to_loss_calculation_info(config_dict: dict, base_path: str):
+    # In place operation
+    for loss_name, loss_info in config_dict['loss_calc_info'].items():
+        collections = loss_info['collections']
+        num_iterations = loss_info['num_iterations']
+        for idx, collection in enumerate(collections):
+            collection_path = os.path.join(base_path, collection)
+            collections[idx] = collection_path
+        config_dict['loss_calc_info'][loss_name] = (collections, num_iterations)
+
+
 def get_config_from_file(path: str) -> TestConfig:
     with open(path, 'r') as f:
         config_dict = json.load(f)
         base_path = config_dict['base_path']
         config_dict['annotations_file_path'] = os.path.join(base_path, config_dict['annotations_file_path'])
 
-        # convert collection names in collections paths
-        for loss_name, loss_info in config_dict['loss_calc_info'].items():
-            collections = loss_info['collections']
-            num_iterations = loss_info['num_iterations']
-            for idx, collection in enumerate(collections):
-                collection_path = os.path.join(base_path, collection)
-                collections[idx] = collection_path
-            config_dict['loss_calc_info'][loss_name] = (collections, num_iterations)
+        convert_dict_to_loss_calculation_info(config_dict, base_path)
 
         test_config = TestConfig(**config_dict)
         return test_config
