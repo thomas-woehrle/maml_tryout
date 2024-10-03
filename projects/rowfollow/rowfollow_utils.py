@@ -170,9 +170,12 @@ def get_train_data_paths(train_base_dir_path: str, dataset_name: str,
         # Get the 'collection_name' column as a list of strings
         collection_names = filtered_df['collection_name'].tolist()
         return [os.path.join(train_base_dir_path, cn) for cn in collection_names]
-    elif dataset_name == 'all-season':
+    elif dataset_name == 'all_season':
         return [os.path.join(train_base_dir_path, d) for d in os.listdir(train_base_dir_path)
                 if os.path.isdir(os.path.join(train_base_dir_path, d))]
+    elif dataset_name == 'all_season_subset1':
+        colls = ['collection-150620', '46e96336-4878-45b4-bdb1-d6d3ee61ae5a', 'late_season']
+        return [os.path.join(train_base_dir_path, col) for col in colls]
     else:
         raise ValueError(f'Unknown dataset name: {dataset_name}')
 
