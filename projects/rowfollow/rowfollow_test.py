@@ -2,7 +2,9 @@ import copy
 import json
 import os
 import sys
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import random
 from typing import Optional
 
 import mlflow
@@ -122,18 +124,15 @@ class TestConfig:
     annotations_file_path: str
     device: str
     seed: Optional[int]
+    use_from_pth: bool = False
+    path_to_pth: Optional[str] = None
+    do_finetune_non_maml: bool = False
+    non_maml_lr: Optional[float] = None
 
 
-@dataclass
-class RowfollowMamlLossCalculator:
+@dataclass(kw_only=True)
+class RowfollowLossCalculator(ABC):
     current_episode: int
-    base_model: maml_api.MamlModel  # Make sure that the model is in the right mode
-    inner_buffers: maml_api.InnerBuffers
-    inner_lrs: maml_api.InnerLrs
-    k: int
-    inner_steps: int
-    use_anil: bool
-    sigma: int
     # Maps a loss_name to a list of paths to collections used to calculate said loss and an int indicating the
     # number of iterations to use to calculate this loss
     loss_calc_info: dict[str, tuple[list[str], int]]
@@ -183,12 +182,27 @@ class RowfollowMamlLossCalculator:
         # print and log loss as calculated across iterations
         iteration_losses = np.array(iteration_losses)
         print(f'avg-{loss_name}: {iteration_losses.mean():.4f}')
-        print(f'std{loss_name}: {iteration_losses.std():.4f}')
+        print(f'std-{loss_name}: {iteration_losses.std():.4f}')
         if self.use_mlflow:
             self.logger.log_metric(f'avg-{loss_name}', iteration_losses.mean(), self.current_episode)
             self.logger.log_metric(f'std-{loss_name}', iteration_losses.std(), self.current_episode)
 
-    def _finetune_and_calc_loss(self, collection_path, seed: int):
+    @abstractmethod
+    def _finetune_and_calc_loss(self, collection_path: str, seed: int) -> tuple[float, int]:
+        pass
+
+
+@dataclass(kw_only=True)
+class RowfollowMamlLossCalculator(RowfollowLossCalculator):
+    base_model: maml_api.MamlModel
+    inner_buffers: maml_api.InnerBuffers
+    inner_lrs: maml_api.InnerLrs
+    k: int
+    inner_steps: int
+    use_anil: bool
+    sigma: int
+
+    def _finetune_and_calc_loss(self, collection_path: str, seed: int):
         # copy model and set it in eval mode. This is needed even for finetuning to use the inner_buffers
         model = copy.deepcopy(self.base_model).to(self.device)
         model.eval()
@@ -205,9 +219,9 @@ class RowfollowMamlLossCalculator:
 
         return collection_loss, collection_n_batches
 
-    def _get_task(self, collection_file_path: str, seed: int) -> maml_api.MamlTask:
+    def _get_task(self, collection_path: str, seed: int) -> maml_api.MamlTask:
         return rowfollow_task.RowfollowTaskOldDataset(self.annotations_file_path,
-                                                      collection_file_path,
+                                                      collection_path,
                                                       self.k,
                                                       self.device,
                                                       self.sigma,
@@ -222,6 +236,106 @@ class RowfollowMamlLossCalculator:
                                             self.use_anil,
                                             use_mlflow=False)
         finetuner.finetune()
+
+
+@dataclass(kw_only=True)
+class RowfollowNonMamlLossCalculator(RowfollowLossCalculator):
+    base_model: rowfollow_model.RowfollowModel
+    do_finetune: bool = False
+    # these are only needed if do_finetune=True
+    k: Optional[int] = None
+    inner_steps: Optional[int] = None
+    alpha: Optional[float] = None
+    sigma: Optional[int] = None
+    # TODO comapre sigma of MAML (mostly 10) and non-MAML (???)
+
+    def _calc_loss(self, loss_name: str, collection_paths: list[str], num_iterations: int):
+        # only if finetuning happens, do we need multiple iterations
+        if not self.do_finetune:
+            num_iterations = 1
+        super()._calc_loss(loss_name, collection_paths, num_iterations)
+
+    def _finetune_and_calc_loss(self, collection_path: str, seed: int) -> tuple[float, int]:
+        # copying, just be safe
+        model = copy.deepcopy(self.base_model)
+        model.eval()
+
+        # we only need this task for its loss function. Therefore, k, sigma and seed are irrelevant. Not very pretty
+        task_for_loss_calc = rowfollow_task.RowfollowTaskOldDataset(annotations_file_path=self.annotations_file_path,
+                                                                    support_data_path=collection_path,
+                                                                    k=-1,
+                                                                    device=self.device,
+                                                                    sigma=-1,
+                                                                    seed=-1
+                                                                    )
+
+        # finetune the model if necessary
+        if self.do_finetune:
+            self._finetune_model(model, collection_path, task_for_loss_calc, seed)
+
+        collection_loss, collection_n_batches = calc_loss_for_one_collection(collection_path,
+                                                                             self.annotations_file_path,
+                                                                             model,
+                                                                             task_for_loss_calc,
+                                                                             self.device)
+
+        return collection_loss, collection_n_batches
+
+    def _finetune_model(self,
+                        model: rowfollow_model.RowfollowModel,
+                        collection_path: str,
+                        task_for_loss_calc: maml_api.MamlTask,
+                        seed: int):
+        print('Finetuning non-MAML model...')
+        model.train()
+
+        x, y = self._sample(collection_path, seed)
+
+        optimizer = torch.optim.SGD(model.parameters(), lr=self.alpha)
+        for i in range(self.inner_steps):
+            optimizer.zero_grad()
+            y_hat = model(x)
+            loss = task_for_loss_calc.calc_loss(y_hat, y, maml_api.Stage.VAL, maml_api.SetToSetType.SUPPORT)
+            print(f'Loss at step {i}: {loss:.4f}')
+            loss.backward()
+            optimizer.step()
+
+        model.eval()
+
+    def _sample(self, collection_path: str, seed: int) -> tuple[torch.Tensor, torch.Tensor]:
+        # Pretty much copied from the .sample(...) of RowfollowTaskOldDataset
+        # TODO integrate into MamlFinetuner, or use DataLoader instead or ...
+        annotations = pd.read_csv(self.annotations_file_path)
+
+        all_img_names = [f for f in os.listdir(collection_path) if f.endswith('.jpg')]
+
+        # set deterministic seeding
+        random.seed(seed)
+        all_img_names = sorted(all_img_names)
+        img_names = random.sample(all_img_names, k=self.k)
+
+        x = []
+        y = []
+
+        for img_name in img_names:
+            image_path = os.path.join(collection_path, img_name)
+
+            vp, ll, lr = rowfollow_task.RowfollowTaskOldDataset.get_kps_for_image(img_name, annotations)
+
+            pre_processed_image, _ = rowfollow_utils.pre_process_image_old_data(image_path, new_size=(320, 224))
+            pre_processed_image = torch.from_numpy(pre_processed_image)
+            x.append(pre_processed_image)
+
+            # vp, ll, lr are coordinates, but we need distributions
+            vp_gt = rowfollow_utils.dist_from_keypoint(vp, sig=self.sigma, downscale=4)
+            ll_gt = rowfollow_utils.dist_from_keypoint(ll, sig=self.sigma, downscale=4)
+            lr_gt = rowfollow_utils.dist_from_keypoint(lr, sig=self.sigma, downscale=4)
+            y.append(torch.stack([vp_gt, ll_gt, lr_gt]))
+
+        x = torch.stack(x)
+        y = torch.stack(y)
+
+        return x.to(self.device), y.to(self.device)
 
 
 def calc_loss_for_one_collection(
@@ -247,27 +361,48 @@ def calc_loss_for_one_collection(
 
 
 def evaluate_from_config(config: TestConfig):
-    model = load_model(config.run_id, config.episode)
-    inner_lrs = load_inner_lrs(config.run_id, config.episode)
-    inner_buffers = load_inner_buffers(config.run_id, config.episode)
+    if config.use_from_pth:
+        state_dict = torch.load(config.path_to_pth, map_location=config.device)
+        model = rowfollow_model.RowfollowModel()
+        model.load_state_dict(state_dict)
 
-    loss_calculator = RowfollowMamlLossCalculator(
-        current_episode=-1,
-        base_model=model,
-        inner_buffers=inner_buffers,
-        inner_lrs=inner_lrs,
-        k=config.k,
-        inner_steps=config.inner_steps,
-        use_anil=config.use_anil,
-        sigma=config.sigma,
-        loss_calc_info=config.loss_calc_info,
-        annotations_file_path=config.annotations_file_path,
-        device=torch.device(config.device),
-        base_seed=config.seed,
-        # mlflow val logging might be supported in the future:
-        use_mlflow=False,
-        logger=None
-    )
+        loss_calculator = RowfollowNonMamlLossCalculator(
+            current_episode=-1,
+            loss_calc_info=config.loss_calc_info,
+            annotations_file_path=config.annotations_file_path,
+            device=torch.device(config.device),
+            base_seed=config.seed,
+            use_mlflow=False,
+            logger=None,
+            base_model=model,
+            do_finetune=config.do_finetune_non_maml,
+            k=config.k,
+            inner_steps=config.inner_steps,
+            alpha=config.non_maml_lr,
+            sigma=config.sigma
+        )
+    else:
+        model = load_model(config.run_id, config.episode)
+        inner_lrs = load_inner_lrs(config.run_id, config.episode)
+        inner_buffers = load_inner_buffers(config.run_id, config.episode)
+
+        loss_calculator = RowfollowMamlLossCalculator(
+            current_episode=-1,
+            base_model=model,
+            inner_buffers=inner_buffers,
+            inner_lrs=inner_lrs,
+            k=config.k,
+            inner_steps=config.inner_steps,
+            use_anil=config.use_anil,
+            sigma=config.sigma,
+            loss_calc_info=config.loss_calc_info,
+            annotations_file_path=config.annotations_file_path,
+            device=torch.device(config.device),
+            base_seed=config.seed,
+            # mlflow val logging might be supported in the future:
+            use_mlflow=False,
+            logger=None
+        )
 
     loss_calculator.calc_losses()
 
@@ -305,7 +440,7 @@ def get_config_from_file(path: str) -> TestConfig:
         return test_config
 
 
-if __name__ == '__main__':
+def main():
     if len(sys.argv) != 2 or sys.argv[1] == '-h':
         print('USAGE: python rowfollow_test.py path/to/test_config.json')
         sys.exit(1)
@@ -319,3 +454,7 @@ if __name__ == '__main__':
 
     evaluate_from_config(config)
     # TODO add possibility to evaluate non-MAML
+
+
+if __name__ == '__main__':
+    main()

@@ -161,7 +161,6 @@ class RowfollowTaskOldDataset(maml_api.MamlTask):
         self.sigma: int = sigma
         self.seed: Optional[int] = seed
         if self.seed is not None:
-            print(f'Setting seed to {self.seed}')
             random.seed(self.seed)
 
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')

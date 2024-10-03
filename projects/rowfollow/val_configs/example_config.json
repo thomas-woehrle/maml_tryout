@@ -7,12 +7,16 @@
   "base_path": "/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/vision_data_latest/val",
   "loss_calc_info": {
     "late23_loss": {
-      "collections": ["collection-100720_191851"],
-      "num_iterations": 5
+      "collections": ["collection-260620_160647"],
+      "num_iterations": 3
     }
   },
   "annotations_file_path": "v2_annotations_val.csv",
   "seed": 0,
   "device": "cpu",
-  "sigma": 10
+  "sigma": 10,
+  "use_from_pth": true,
+  "path_to_pth": "/Users/tomwoehrle/Documents/research_assistance/evaluate_adaptation/training/all_early_stage/model_dir/row-follow-epoch=29-val_loss=0.000423_state_dict.pth",
+  "do_finetune_non_maml": false,
+  "non_maml_lr": 0.1
 }
