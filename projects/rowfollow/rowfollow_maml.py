@@ -1,4 +1,5 @@
 import copy
+import glob
 import os
 import random
 from typing import Any
@@ -42,11 +43,27 @@ def main(maml_hparams: maml_config.MamlHyperParameters, train_config: maml_confi
     if env_config.seed is not None:
         maml_train.set_seed(env_config.seed)
 
+    # used to sample tasks
+    all_train_img_paths: list[str] = []
+    for collection_path in train_collections:
+        all_train_img_paths.extend(glob.glob(collection_path + '/*.jpg'))
+
+    if env_config.do_use_mlflow:
+        mlflow.log_metric('num_train_images', len(all_train_img_paths))
+
+    # reformat train_collections, to quickly get from collection name to collection path
+    train_collections = {c.split('/')[-1]: c for c in train_collections}
+
     def sample_task(training_stage: maml_api.Stage):
         if training_stage == maml_api.Stage.TRAIN:
-            support_data_path = random.choice(train_collections)
+            # Sample an image from all images first, then use the collection this image is in.
+            # Done so that a collection's sample probability is relative to its number of images compared to all images
+            sampled_img = random.choice(all_train_img_paths)
+            sampled_collection = sampled_img.split('/')[-2]
+            sampled_collection_path = train_collections[sampled_collection]
+            print('sampled collection:', sampled_collection)
             return rowfollow_task.RowfollowTaskOldDataset(train_annotations,
-                                                          support_data_path,
+                                                          sampled_collection_path,
                                                           maml_hparams.k,
                                                           env_config.device,
                                                           sigma=other_config['sigma'])

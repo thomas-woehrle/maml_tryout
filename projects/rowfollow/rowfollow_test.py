@@ -145,7 +145,7 @@ class RowfollowLossCalculator(ABC):
     def calc_losses(self):
         for loss_name, (collections, num_iterations) in self.loss_calc_info.items():
             print('\n++++++++++++++++++++++++++++++++++++++++++++++++++++')
-            print(f'Calculating loss "{loss_name}"')
+            print(f'Calculating loss "{loss_name}" in episode {self.current_episode}')
             self._calc_loss(loss_name, collections, num_iterations)
             print(f'Finished calculating loss "{loss_name}"')
             print('++++++++++++++++++++++++++++++++++++++++++++++++++++\n')
