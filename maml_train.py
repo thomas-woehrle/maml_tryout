@@ -243,16 +243,15 @@ class MamlTrainer(nn.Module):
                     example_x = (self.sample_task(maml_api.Stage.TRAIN).sample(maml_api.SetToSetType.SUPPORT)[0].
                                  cpu().numpy())
 
-                    timestamp = time.time_ns()
-                    print(f'Creating model checkpoint {timestamp}...')
-                    torch.save(copy.deepcopy(self.model).cpu(), f'{timestamp}.pth')
+                    print(f'Creating model checkpoint...')
+                    torch.save(copy.deepcopy(self.model).cpu(), 'model.pth')
                     # this makes problems when running on the cluster:
                     # mlflow.pytorch.log_model(copy.deepcopy(self.model).cpu(), f'ep{episode}/model',
                     #                         input_example=example_x)
-                    print(f'Uploading model checkpoint {timestamp}...')
-                    mlflow.log_artifact(f'{timestamp}.pth', f'ep{episode}')
-                    print(f'Removing model checkpoint {timestamp} locally...')
-                    os.remove(f'{timestamp}.pth')
+                    print(f'Uploading model checkpoint...')
+                    mlflow.log_artifact('model.pth', f'ep{episode}')
+                    print(f'Removing model checkpoint locally...')
+                    os.remove('model.pth')
 
                     # TODO should this be logged even if hparams.use_bnrs and/or hparams.use_lslr is false?
                     self.logger.log_dict(self.inner_buffers, f'ep{episode}/inner_buffers.json')
