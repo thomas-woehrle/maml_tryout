@@ -14,27 +14,29 @@ from projects.rowfollow.rowfollow_test import load_model, load_inner_lrs, load_i
 
 
 def main(config: TestConfig):
-    if config.path_to_ckpt_file is None:
+    if config.path_to_pth is None:
         model = load_model(config.run_id, config.episode)
         inner_lrs = load_inner_lrs(config.run_id, config.episode)
         inner_buffers = load_inner_buffers(config.run_id, config.episode)
     else:
-        model = get_model_from_ckpt_file(config.path_to_ckpt_file)
+        model = get_model_from_ckpt_file(config.path_to_pth)
 
-    task = rowfollow_task.RowfollowTaskOldDataset(config.support_annotations_file_path,
-                                                  config.support_collection_path,
+    collection_path = os.path.join(config.base_path, config.visual_test_collection)
+
+    task = rowfollow_task.RowfollowTaskOldDataset(config.annotations_file_path,
+                                                  collection_path,
                                                   config.k,
                                                   torch.device(config.device),
                                                   sigma=config.sigma,
                                                   seed=config.seed)
 
-    if config.path_to_ckpt_file is None:
+    if config.path_to_pth is None:
         finetuner = maml_eval.MamlFinetuner(model, inner_lrs, inner_buffers, config.inner_steps, task, config.use_anil)
         finetuner.finetune()
 
     model.eval()
 
-    target_directory = config.support_collection_path
+    target_directory = collection_path
 
     for img_name in os.listdir(target_directory):
         img_path = os.path.join(target_directory, img_name)

@@ -81,6 +81,18 @@ def get_local_artifact_path(run_id: str, episode: int):
     return os.path.join(MLFLOW_CACHE_DIR, 'mlruns', run_id, f'ep{episode}')
 
 
+def load_model2(run_id: str, episode: int) -> maml_api.MamlModel:
+    artifact_uri = 'runs:/{}/{}/{}'.format(run_id, 'ep{}'.format(episode), 'model.pth')
+    local_path = get_local_artifact_path(run_id, episode)
+
+    print('Loading model...')
+    final_path = mlflow.artifacts.download_artifacts(artifact_uri=artifact_uri, dst_path=local_path)
+    print(f'model.pth at {final_path}.')
+
+    model = torch.load(final_path)
+    return model
+
+
 def load_model(run_id: str, episode: int) -> maml_api.MamlModel:
     model_uri = 'runs:/{}/{}/{}'.format(run_id, 'ep{}'.format(episode), 'model')
     local_path = get_local_artifact_path(run_id, episode)
@@ -121,6 +133,7 @@ class TestConfig:
     use_anil: bool
     base_path: str
     loss_calc_info: dict[str, tuple[list[str], int]]
+    visual_test_collection: str
     annotations_file_path: str
     device: str
     seed: Optional[int]
@@ -382,7 +395,8 @@ def evaluate_from_config(config: TestConfig):
             sigma=config.sigma
         )
     else:
-        model = load_model(config.run_id, config.episode)
+        # model = load_model(config.run_id, config.episode)
+        model = load_model2(config.run_id, config.episode)
         inner_lrs = load_inner_lrs(config.run_id, config.episode)
         inner_buffers = load_inner_buffers(config.run_id, config.episode)
 

@@ -210,6 +210,10 @@ class MamlTrainer(nn.Module):
             # self.log_buffers(episode)
             # self.inner_optimizer.log_lrs(episode, self.logger)
             self.current_episode = episode
+
+            if self.do_use_mlflow:
+                mlflow.log_metric('current_episode', episode)
+
             optimizer.zero_grad()
             params, buffers = self.model.get_state()
 
