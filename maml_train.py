@@ -212,6 +212,7 @@ class MamlTrainer(nn.Module):
             self.current_episode = episode
 
             if self.do_use_mlflow:
+                # TODO switch to self.logger instead to buffer log this? does this actually cost time?
                 mlflow.log_metric('current_episode', episode)
 
             optimizer.zero_grad()
@@ -243,19 +244,25 @@ class MamlTrainer(nn.Module):
 
                 # log model under condition
                 if episode % self.log_model_every_n_episodes == 0 or episode == self.hparams.n_episodes - 1:
+                    print('\n ###### Saving model checkpoint #######')
                     # TrainingStage and SetToSetType passed to sample_task shouldn't play a role here
-                    example_x = (self.sample_task(maml_api.Stage.TRAIN).sample(maml_api.SetToSetType.SUPPORT)[0].
-                                 cpu().numpy())
+                    # example_x = (self.sample_task(maml_api.Stage.TRAIN).sample(maml_api.SetToSetType.SUPPORT)[0].
+                    #             cpu().numpy())
 
-                    print(f'Creating model checkpoint...')
-                    torch.save(copy.deepcopy(self.model).cpu(), 'model.pth')
+                    timestamp = time.time_ns()
+                    file_name = f'{timestamp}.pth'
+
+                    print(f'Creating model checkpoint {file_name} ...')
+                    torch.save(copy.deepcopy(self.model).cpu(), file_name)
                     # this makes problems when running on the cluster:
                     # mlflow.pytorch.log_model(copy.deepcopy(self.model).cpu(), f'ep{episode}/model',
                     #                         input_example=example_x)
-                    print(f'Uploading model checkpoint...')
-                    mlflow.log_artifact('model.pth', f'ep{episode}')
-                    print(f'Removing model checkpoint locally...')
-                    os.remove('model.pth')
+                    print(f'Uploading model checkpoint {file_name} ...')
+                    mlflow.log_artifact(file_name, f'ep{episode}')
+                    print(f'Removing model checkpoint {file_name} locally...')
+                    os.remove(file_name)
+
+                    print('###### Model checkpoint saved ####### \n')
 
                     # TODO should this be logged even if hparams.use_bnrs and/or hparams.use_lslr is false?
                     self.logger.log_dict(self.inner_buffers, f'ep{episode}/inner_buffers.json')
