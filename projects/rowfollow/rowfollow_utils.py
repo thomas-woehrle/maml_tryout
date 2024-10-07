@@ -152,15 +152,20 @@ def get_train_data_paths(train_base_dir_path: str, dataset_name: str,
         colls = ['collection-190620_164740', 'collection-190620_170034', 'collection-190620_172602',
                  'collection-190620_172956', 'collection-190620_173247', 'collection-190620_173536']
         return [os.path.join(train_base_dir_path, col) for col in colls]
-    elif dataset_name == 'early':
+    elif dataset_name in ['early', 'late']:
         df = pd.read_csv(dataset_info_path)
 
         # Filter the rows where 'split' is 'train' and 'growth_stage' is 'early'
-        filtered_df = df[(df['split'] == 'train') & (df['growth_stage'] == 'early')]
+        filtered_df = df[(df['split'] == 'train') & (df['growth_stage'] == dataset_name)]
 
         # Get the 'collection_name' column as a list of strings
         collection_names = filtered_df['collection_name'].tolist()
         return [os.path.join(train_base_dir_path, cn) for cn in collection_names]
+    elif dataset_name == 'late_subset1':
+        colls = ['4022eb62-259e-4ad2-8efc-484339ce9d2f', '603d0bd0-f7af-4491-b2a0-688a42b0e085',
+                 '75b28a62-7664-4959-9ad2-c67a6ad3e754', 'collection-020720_180228',
+                 'collection-020720_185946', 'collection-100720_164659']
+        return [os.path.join(train_base_dir_path, col) for col in colls]
     elif dataset_name == 'early_and_late':
         df = pd.read_csv(dataset_info_path)
 

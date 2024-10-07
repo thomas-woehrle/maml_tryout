@@ -56,7 +56,7 @@ class TrainConfig:
     n_val_iters: Frequency of validation iterations.
     """
     log_model_every_n_episodes: int = 1000
-    log_val_loss_every_n_episodes: int = 500
+    log_val_loss_every_n_episodes: int = 1000
 
 
 @dataclass
