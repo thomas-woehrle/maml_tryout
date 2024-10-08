@@ -150,14 +150,14 @@ def load_inner_lrs(run_id: str, episode: int) -> maml_api.InnerLrs:
     return mlflow.artifacts.load_dict(artifact_uri)
 
 
-def load_inner_buffers(run_id: str, episode: int) -> maml_api.InnerBuffers:
+def load_inner_buffers(run_id: str, episode: int, device: torch.device) -> maml_api.InnerBuffers:
     artifact_uri = 'runs:/{}/{}/{}'.format(run_id, 'ep{}'.format(episode), 'inner_buffers.json')
     inner_buffers = mlflow.artifacts.load_dict(artifact_uri)
 
     # at this point the inner_buffers do not contain tensors, but only a list -> this needs to be transformed
     for i, named_buffers in inner_buffers.items():
         for n, b in named_buffers.items():
-            inner_buffers[i][n] = torch.tensor(b)
+            inner_buffers[i][n] = torch.tensor(b).to(device)
     return inner_buffers
 
 
@@ -438,7 +438,7 @@ def evaluate_from_config(config: TestConfig):
         # model = load_model(config.run_id, config.episode)
         model = load_model(config.run_id, config.episode)
         inner_lrs = load_inner_lrs(config.run_id, config.episode)
-        inner_buffers = load_inner_buffers(config.run_id, config.episode)
+        inner_buffers = load_inner_buffers(config.run_id, config.episode, torch.device(config.device))
 
         loss_calculator = RowfollowMamlLossCalculator(
             current_episode=-1,

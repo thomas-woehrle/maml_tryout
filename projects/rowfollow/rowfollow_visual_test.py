@@ -21,7 +21,7 @@ def main(config: TestConfig):
     else:
         model = load_model(config.run_id, config.episode)
         inner_lrs = load_inner_lrs(config.run_id, config.episode)
-        inner_buffers = load_inner_buffers(config.run_id, config.episode)
+        inner_buffers = load_inner_buffers(config.run_id, config.episode, torch.device(config.device))
 
     collection_path = os.path.join(config.base_path, config.visual_test_collection)
 
@@ -42,7 +42,7 @@ def main(config: TestConfig):
     dataset = RowfollowValDataset(collection_path, config.annotations_file_path, torch.device(config.device))
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1)
 
-    for x, y in dataloader:
+    for idx, (x, y) in enumerate(dataloader):
         # loss calculation
         y_hat = model(x)
         l1_loss = task.calc_loss(y_hat, y, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET)
@@ -51,12 +51,12 @@ def main(config: TestConfig):
         img = rowfollow_utils.reverse_preprocessing(x.squeeze())
 
         # display image w/ gt lines
-        img_with_lines = viz.img_with_lines_from_pred(img, y)
-        cv2.imshow(f'gt_img; {str(l1_loss.item())}', img_with_lines)
+        # img_with_lines = viz.img_with_lines_from_pred(img, y)
+        cv2.imshow(f'{idx}-gt {str(l1_loss.item())}', img)
 
         # display image w/ predicted lines
         img_with_lines = viz.img_with_lines_from_pred(img, y_hat)
-        cv2.imshow(str(l1_loss.item()), img_with_lines)
+        cv2.imshow(f'{idx}-hat {str(l1_loss.item())}', img_with_lines)
 
         cv2.waitKey()
         cv2.destroyAllWindows()
