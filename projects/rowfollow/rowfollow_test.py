@@ -98,15 +98,32 @@ def get_local_artifact_path(run_id: str, episode: int):
     return os.path.join(MLFLOW_CACHE_DIR, 'mlruns', run_id, f'ep{episode}')
 
 
-def load_model2(run_id: str, episode: int) -> maml_api.MamlModel:
-    artifact_uri = 'runs:/{}/{}/{}'.format(run_id, 'ep{}'.format(episode), 'model.pth')
+def load_pth_model(run_id: str, episode: int) -> maml_api.MamlModel:
+    artifact_info = mlflow.artifacts.list_artifacts(run_id=run_id, artifact_path=f'ep{episode}')
+    model_path = None
+    for file_info in artifact_info:
+        if file_info.path.endswith('pth'):
+            model_path = file_info.path
+            break
+
+    if model_path is None:
+        print("Couldn't find .pth file")
+        raise FileNotFoundError
+
     local_path = get_local_artifact_path(run_id, episode)
+    local_model_path = os.path.join(local_path, model_path.split('/')[-1])
+    if os.path.exists(local_model_path):
+        print('Cached .pth file exists')
+        model = torch.load(local_model_path)
+    else:
+        artifact_uri = f'runs:/{run_id}/{model_path}'
 
-    print('Loading model...')
-    final_path = mlflow.artifacts.download_artifacts(artifact_uri=artifact_uri, dst_path=local_path)
-    print(f'model.pth at {final_path}.')
+        print('Downloading model...')
+        final_path = mlflow.artifacts.download_artifacts(artifact_uri=artifact_uri, dst_path=local_path)
+        print(f'.pth file at {final_path}.')
 
-    model = torch.load(final_path)
+        model = torch.load(final_path)
+    print('.pth Model loaded')
     return model
 
 
@@ -115,13 +132,17 @@ def load_model(run_id: str, episode: int) -> maml_api.MamlModel:
     local_path = get_local_artifact_path(run_id, episode)
 
     try:
-        os.makedirs(local_path, exist_ok=True)
-        print('Trying to load cached model...')
-        return mlflow.pytorch.load_model(os.path.join(local_path, 'model'))
+        return load_pth_model(run_id, episode)
+    except FileNotFoundError as e:
+        print('Trying to load mlflow model instead')
+        try:
+            os.makedirs(local_path, exist_ok=True)
+            print('Trying to load cached mlflow model...')
+            return mlflow.pytorch.load_model(os.path.join(local_path, 'model'))
 
-    except (OSError, mlflow.exceptions.MlflowException) as e:
-        print('No cached model. Downloading model...')
-        return mlflow.pytorch.load_model(model_uri, local_path)
+        except (OSError, mlflow.exceptions.MlflowException) as e:
+            print('No cached model. Downloading model...')
+            return mlflow.pytorch.load_model(model_uri, local_path)
 
 
 def load_inner_lrs(run_id: str, episode: int) -> maml_api.InnerLrs:
@@ -415,7 +436,7 @@ def evaluate_from_config(config: TestConfig):
         )
     else:
         # model = load_model(config.run_id, config.episode)
-        model = load_model2(config.run_id, config.episode)
+        model = load_model(config.run_id, config.episode)
         inner_lrs = load_inner_lrs(config.run_id, config.episode)
         inner_buffers = load_inner_buffers(config.run_id, config.episode)
 
