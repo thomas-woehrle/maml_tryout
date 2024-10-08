@@ -308,7 +308,7 @@ class RowfollowNonMamlLossCalculator(RowfollowLossCalculator):
 
     def _finetune_and_calc_loss(self, collection_path: str, seed: int) -> tuple[float, int]:
         # copying, just be safe
-        model = copy.deepcopy(self.base_model)
+        model = copy.deepcopy(self.base_model).to(self.device)
         model.eval()
 
         # we only need this task for its loss function. Therefore, k, sigma and seed are irrelevant. Not very pretty
