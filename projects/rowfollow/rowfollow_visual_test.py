@@ -2,15 +2,17 @@ import os
 import sys
 
 import cv2
+
 import torch
 import torch.utils.data
 
+import maml_api
 from rf_utils import viz
 
 import maml_eval
 import rowfollow_utils
 from projects.rowfollow import rowfollow_task
-from projects.rowfollow.rowfollow_test import load_model, load_inner_lrs, load_inner_buffers, TestConfig, get_config_from_file, get_model_from_ckpt_file
+from projects.rowfollow.rowfollow_test import load_model, load_inner_lrs, load_inner_buffers, TestConfig, get_config_from_file, get_model_from_ckpt_file, RowfollowValDataset
 
 
 def main(config: TestConfig):
@@ -36,20 +38,24 @@ def main(config: TestConfig):
 
     model.eval()
 
-    target_directory = collection_path
+    dataset = RowfollowValDataset(collection_path, config.annotations_file_path, torch.device(config.device))
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1)
 
-    for img_name in os.listdir(target_directory):
-        img_path = os.path.join(target_directory, img_name)
-        if not (img_path.endswith('.png') or img_path.endswith('.jpg')):
-            continue
-        data, img = rowfollow_utils.pre_process_image_old_data(img_path)
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        data = torch.from_numpy(data).unsqueeze(0)
+    for x, y in dataloader:
+        # loss calculation
+        y_hat = model(x)
+        l1_loss = task.calc_loss(y_hat, y, maml_api.Stage.VAL, maml_api.SetToSetType.TARGET)
 
-        y_hat = model(data)
+        # display image
+        img = rowfollow_utils.reverse_preprocessing(x.squeeze())
 
+        # display image w/ gt lines
+        img_with_lines = viz.img_with_lines_from_pred(img, y)
+        cv2.imshow(f'gt_img; {str(l1_loss.item())}', img_with_lines)
+
+        # display image w/ predicted lines
         img_with_lines = viz.img_with_lines_from_pred(img, y_hat)
-        cv2.imshow('', img_with_lines)
+        cv2.imshow(str(l1_loss.item()), img_with_lines)
 
         cv2.waitKey()
         cv2.destroyAllWindows()

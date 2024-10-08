@@ -50,6 +50,10 @@ def pre_process_image_old_data(path_to_image, new_size=(320, 224)):
     return data, image
 
 
+def get_collection_growth_stage(dataset_info_df: pd.DataFrame, collection_name: str):
+    return dataset_info_df.loc[dataset_info_df['collection_name'] == collection_name, 'growth_stage'].iloc[0]
+
+
 def reverse_preprocessing(pre_processed_img: torch.Tensor):
     # Move the tensor to CPU if it's not
     pre_processed_img = pre_processed_img.cpu() if pre_processed_img.is_cuda else pre_processed_img

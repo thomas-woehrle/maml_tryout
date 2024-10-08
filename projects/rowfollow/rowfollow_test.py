@@ -25,9 +25,23 @@ import rowfollow_utils
 # TODO this file should be split into multiple smaller ones
 
 
+def is_very_late(validation_collection_path: str):
+    base_path = '/'.join(validation_collection_path.split('/')[:-2])
+    dataset_info_path = os.path.join(base_path, 'dataset_info.csv')
+    info_df = pd.read_csv(dataset_info_path)
+
+    collection_name = validation_collection_path.split('/')[-1]
+    growth_stage = rowfollow_utils.get_collection_growth_stage(info_df, collection_name)
+
+    return growth_stage == 'very late'
+
+
 class RowfollowValDataset(torch.utils.data.Dataset):
     # TODO Remove 'Val' from name
-    def __init__(self, validation_collection_path: str, validation_annotations_file_path: str, device: torch.device):
+    def __init__(self,
+                 validation_collection_path: str,
+                 validation_annotations_file_path: str,
+                 device: torch.device):
         self.validation_collection_path: str = validation_collection_path
         self.validation_annotations_file_path: str = validation_annotations_file_path
 
@@ -35,6 +49,7 @@ class RowfollowValDataset(torch.utils.data.Dataset):
         self.annotations_df = self._filter_existing_images()
         self.sigma = 10
         self.device = device
+        self.is_very_late = is_very_late(self.validation_collection_path)
 
     def _filter_existing_images(self):
         # Create a list of available image paths from the directories
@@ -54,14 +69,16 @@ class RowfollowValDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.annotations_df)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
         annotation_row = self.annotations_df.iloc[idx]
         image_name = annotation_row['image_name']
         collection_name = image_name.split('_cam')[0]
 
         image_path = os.path.join(self.validation_collection_path, image_name)
 
-        vp, ll, lr = rowfollow_task.RowfollowTaskOldDataset.get_kps_for_image(image_name, annotation_row=annotation_row)
+        original_size = (320, 224) if self.is_very_late else (1280, 720)
+        vp, ll, lr = rowfollow_task.RowfollowTaskOldDataset.get_kps_for_image(image_name, original_size=original_size,
+                                                                              annotation_row=annotation_row)
 
         pre_processed_image, _ = rowfollow_utils.pre_process_image_old_data(image_path, new_size=(320, 224))
         pre_processed_image = torch.from_numpy(pre_processed_image)
@@ -333,7 +350,9 @@ class RowfollowNonMamlLossCalculator(RowfollowLossCalculator):
         for img_name in img_names:
             image_path = os.path.join(collection_path, img_name)
 
-            vp, ll, lr = rowfollow_task.RowfollowTaskOldDataset.get_kps_for_image(img_name, annotations)
+            original_size = (320, 224) if is_very_late(collection_path) else (1280, 720)
+            vp, ll, lr = rowfollow_task.RowfollowTaskOldDataset.get_kps_for_image(img_name, annotations,
+                                                                                  original_size=original_size)
 
             pre_processed_image, _ = rowfollow_utils.pre_process_image_old_data(image_path, new_size=(320, 224))
             pre_processed_image = torch.from_numpy(pre_processed_image)

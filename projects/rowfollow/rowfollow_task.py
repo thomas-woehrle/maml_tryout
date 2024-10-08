@@ -163,6 +163,9 @@ class RowfollowTaskOldDataset(maml_api.MamlTask):
         if self.seed is not None:
             random.seed(self.seed)
 
+        self.dataset_info_df = pd.read_csv(
+            os.path.join('/'.join(self.support_data_path.split('/')[:-2]), 'dataset_info.csv')
+        )
         self._loss_fct = nn.KLDivLoss(reduction='batchmean')
 
     @staticmethod
@@ -201,7 +204,11 @@ class RowfollowTaskOldDataset(maml_api.MamlTask):
         for img_name in img_names:
             image_path = os.path.join(data_path, img_name)
 
-            vp, ll, lr = self.get_kps_for_image(img_name, self.annotations)
+            if utils.get_collection_growth_stage(self.dataset_info_df, data_path.split('/')[-1]) == 'very late':
+                original_size = (320, 224)
+            else:
+                original_size = (1280, 720)
+            vp, ll, lr = self.get_kps_for_image(img_name, self.annotations, original_size=original_size)
 
             pre_processed_image, _ = utils.pre_process_image_old_data(image_path, new_size=(320, 224))
             pre_processed_image = torch.from_numpy(pre_processed_image)
